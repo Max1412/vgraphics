@@ -120,8 +120,8 @@ namespace vg
             if(vk::createInstance(&createInfo, nullptr, &m_instance) != vk::Result::eSuccess)
                 throw std::runtime_error("Instance could not be created");
 
-            // print extensions
-            getAllSupportedExtensions(true);
+            // print instance extensions
+            // getAllSupportedExtensions(true);
         }
 
         // get glfw + (cond.) debug layer extensions
@@ -209,7 +209,7 @@ namespace vg
 
             vk::DebugUtilsMessengerCreateInfoEXT createInfo(
                 {},
-                sevFlags::eError | sevFlags::eWarning | sevFlags::eVerbose | sevFlags::eInfo,
+                sevFlags::eError | sevFlags::eWarning | sevFlags::eVerbose, // | sevFlags::eInfo,
                 typeFlags::eGeneral | typeFlags::ePerformance | typeFlags::eValidation,
                 reinterpret_cast<PFN_vkDebugUtilsMessengerCallbackEXT>(debugCallback));
 
@@ -758,11 +758,7 @@ public:
 
         vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
 
-        m_context.getDevice().waitIdle();
-
         m_context.getGraphicsQueue().submit(submitInfo, nullptr);
-
-        m_context.getDevice().waitIdle();
 
         std::array<vk::SwapchainKHR, 1> swapChains = { m_context.getSwapChain() };
         vk::Result result;
