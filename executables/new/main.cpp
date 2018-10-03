@@ -104,7 +104,7 @@ namespace vg
                 throw std::runtime_error("Validation layers requested, but not available!");
             }
 
-            vk::ApplicationInfo appInfo("Vulkan Test New", 1, "No Engine", 1, VK_VERSION_1_1);
+            vk::ApplicationInfo appInfo("Vulkan Test New", 1, "No Engine", 1, VK_API_VERSION_1_0);
 
             // glfw + (cond.) debug layer
             auto requiredExtensions = getRequiredExtensions();
@@ -209,7 +209,7 @@ namespace vg
 
             vk::DebugUtilsMessengerCreateInfoEXT createInfo(
                 {},
-                sevFlags::eError | sevFlags::eWarning | sevFlags::eVerbose, // | sevFlags::eInfo,
+                sevFlags::eError | sevFlags::eWarning | sevFlags::eVerbose | sevFlags::eInfo,
                 typeFlags::eGeneral | typeFlags::ePerformance | typeFlags::eValidation,
                 reinterpret_cast<PFN_vkDebugUtilsMessengerCallbackEXT>(debugCallback));
 
@@ -306,9 +306,9 @@ namespace vg
             for (const auto& queueFamily : qfprops)
             {
                 if (queueFamily.queueCount > 0 && queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
-                    indices.graphicsFamily = 1;
+                    indices.graphicsFamily = i;
 
-                auto presentSupport = physDevice.getSurfaceSupportKHR(i, m_surface);
+                bool presentSupport = physDevice.getSurfaceSupportKHR(i, m_surface);
                 if (queueFamily.queueCount > 0 && presentSupport)
                     indices.presentFamily = i;
 
@@ -598,11 +598,13 @@ public:
 
         vk::PipelineViewportStateCreateInfo viewportState({}, 1, &viewport, 1, &scissor);
 
-        vk::PipelineRasterizationStateCreateInfo rasterizer({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise, VK_FALSE);
+        vk::PipelineRasterizationStateCreateInfo rasterizer({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eBack, vk::FrontFace::eClockwise, VK_FALSE, 0, 0, 0, 1.0f);
 
-        vk::PipelineMultisampleStateCreateInfo mulitsampling({}, vk::SampleCountFlagBits::e1, VK_FALSE, 1.0f, nullptr, VK_FALSE, VK_FALSE);
+        vk::PipelineMultisampleStateCreateInfo mulitsampling({}, vk::SampleCountFlagBits::e1, VK_FALSE);
 
         vk::PipelineColorBlendAttachmentState colorBlendAttachment; // standard values for blending.
+        colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
+        colorBlendAttachment.setBlendEnable(VK_FALSE);
         // to enable blending, translate the following into hpp code: (and also use logic op copy in the struct below)
         //colorBlendAttachment.blendEnable = VK_TRUE;
         //colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
@@ -613,14 +615,20 @@ public:
         //colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
         vk::PipelineColorBlendStateCreateInfo colorBlending; // standard values for now
+        colorBlending.setLogicOpEnable(VK_FALSE);
+        colorBlending.setLogicOp(vk::LogicOp::eCopy);
         colorBlending.attachmentCount = 1;
         colorBlending.setPAttachments(&colorBlendAttachment);
+        colorBlending.setBlendConstants(std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f});
 
         //std::array<vk::DynamicState, 2> dynamicStates = { vk::DynamicState::eViewport, vk::DynamicState::eLineWidth };
 
         //vk::PipelineDynamicStateCreateInfo dynamicState({}, dynamicStates.size(), dynamicStates.data());
 
         vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
+        pipelineLayoutInfo.setSetLayoutCount(0);
+        pipelineLayoutInfo.setPushConstantRangeCount(0);
+
 
         m_pipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutInfo);
         
@@ -706,14 +714,14 @@ public:
 
         m_commandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
 
-        for (auto i = 0; i < m_commandBuffers.size(); i++)
+        for (size_t i = 0; i < m_commandBuffers.size(); i++)
         {
             vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
 
             // begin recording
             m_commandBuffers.at(i).begin(beginInfo);
 
-            vk::ClearValue clearColor(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
+            vk::ClearValue clearColor(std::array<float, 4>{ 0.1f, 0.1f, 0.1f, 1.0f });
             vk::RenderPassBeginInfo renderpassInfo(m_renderpass, m_swapChainFramebuffers.at(i), { {0, 0}, m_context.getSwapChainExtent() }, 1, &clearColor);
             
             /////////////////////////////
