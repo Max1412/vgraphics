@@ -114,7 +114,7 @@ namespace vg
             if constexpr (enableValidationLayers)
                 layerNames = validationLayers;
 
-            vk::InstanceCreateInfo createInfo({}, &appInfo, layerNames.size(), layerNames.data(), requiredExtensions.size(), requiredExtensions.data());
+            vk::InstanceCreateInfo createInfo({}, &appInfo, static_cast<uint32_t>(layerNames.size()), layerNames.data(), static_cast<uint32_t>(requiredExtensions.size()), requiredExtensions.data());
 
 
             if(vk::createInstance(&createInfo, nullptr, &m_instance) != vk::Result::eSuccess)
@@ -338,7 +338,10 @@ namespace vg
 
             vk::PhysicalDeviceFeatures deviceFeatures;
 
-            vk::DeviceCreateInfo createInfo({}, queueCreateInfos.size(), queueCreateInfos.data(), 0, nullptr, deviceExtensions.size(), deviceExtensions.data(), &deviceFeatures);
+            vk::DeviceCreateInfo createInfo({},
+                static_cast<uint32_t>(queueCreateInfos.size()), queueCreateInfos.data(),
+                0, nullptr,
+                static_cast<uint32_t>(deviceExtensions.size()), deviceExtensions.data(), &deviceFeatures);
 
             if constexpr(enableValidationLayers)
             {
@@ -412,7 +415,7 @@ namespace vg
             }
             else 
             {
-                VkExtent2D actualExtent = { m_width, m_height };
+                VkExtent2D actualExtent = { static_cast<uint32_t>(m_width), static_cast<uint32_t>(m_height) };
                 actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
                 actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
                 return actualExtent;
@@ -718,7 +721,7 @@ public:
 
     void createCommandBuffers()
     {
-        vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, m_swapChainFramebuffers.size());
+        vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
 
         m_commandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
 
@@ -784,7 +787,7 @@ public:
 
         std::array<vk::SwapchainKHR, 1> swapChains = { m_context.getSwapChain() };
         vk::Result result;
-        vk::PresentInfoKHR presentInfo(1, signalSemaphores, swapChains.size(), swapChains.data(), &imageIndex, &result);
+        vk::PresentInfoKHR presentInfo(1, signalSemaphores, static_cast<uint32_t>(swapChains.size()), swapChains.data(), &imageIndex, &result);
 
 
         if(vk::Result::eSuccess != m_context.getPresentQueue().presentKHR(presentInfo))
