@@ -209,7 +209,7 @@ namespace vg
 
             vk::DebugUtilsMessengerCreateInfoEXT createInfo(
                 {},
-                sevFlags::eError | sevFlags::eInfo | sevFlags::eVerbose | sevFlags::eWarning,
+                sevFlags::eError | sevFlags::eWarning | sevFlags::eVerbose, // | sevFlags::eInfo,
                 typeFlags::eGeneral | typeFlags::ePerformance | typeFlags::eValidation,
                 reinterpret_cast<PFN_vkDebugUtilsMessengerCallbackEXT>(debugCallback));
 
@@ -317,7 +317,6 @@ namespace vg
 
                 i++;
             }
-
 
             return indices;
         }
@@ -428,7 +427,7 @@ namespace vg
             auto presentMode = chooseSwapPresentMode(swapChainSupport.m_presentModes);
             auto extent = chooseSwapExtent(swapChainSupport.m_capabilities);
 
-            // determin the number of images in the swapchain (queue length)
+            // determine the number of images in the swapchain (queue length)
             uint32_t imageCount = swapChainSupport.m_capabilities.minImageCount + 1;
             if (swapChainSupport.m_capabilities.maxImageCount > 0 && imageCount > swapChainSupport.m_capabilities.maxImageCount)
                 imageCount = swapChainSupport.m_capabilities.maxImageCount;
@@ -442,14 +441,19 @@ namespace vg
             {
                 createInfo.imageSharingMode = vk::SharingMode::eConcurrent; // exclusive is standard value
                 createInfo.queueFamilyIndexCount = 2;                       // 0 is standard value
-                createInfo.pQueueFamilyIndices = queueFamilyIndices;
             }
+            else
+            {
+                createInfo.imageSharingMode = vk::SharingMode::eExclusive;
+                createInfo.queueFamilyIndexCount = 1;
+            }
+            createInfo.pQueueFamilyIndices = queueFamilyIndices;
 
             createInfo.preTransform = swapChainSupport.m_capabilities.currentTransform;
             createInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
             createInfo.presentMode = presentMode;
             createInfo.clipped = true;
-            //createInfo.oldSwapchain = VK_NULL_HANDLE;
+            createInfo.oldSwapchain = nullptr;
 
             m_swapchain = m_device.createSwapchainKHR(createInfo);
             m_swapChainImages = m_device.getSwapchainImagesKHR(m_swapchain);
@@ -478,11 +482,21 @@ namespace vg
         GLFWwindow* getWindow() const { return m_window; }
 
         vk::Device getDevice() const { return m_device; }
+        vk::PhysicalDevice getPhysicalDevice() const { return m_phsyicalDevice; }
 
         int getWidth() const { return m_width; }
         int getHeight() const { return m_height; }
 
-        vk::Extent2D getSwapChainExtent() const { return m_swapChainExtent;  }
+        vk::Extent2D getSwapChainExtent() const { return m_swapChainExtent; }
+        vk::Format getSwapChainImageFormat() const { return m_swapChainImageFormat; }
+        std::vector<vk::ImageView> getSwapChainImageViews() const { return m_swapChainImageViews; }
+        vk::SwapchainKHR getSwapChain() const { return m_swapchain; }
+
+        vk::Queue getGraphicsQueue() const { return m_graphicsQueue; }
+        vk::Queue getPresentQueue() const { return m_presentQueue;  }
+
+        VmaAllocator getAllocator() const { return m_allocator; }
+
     private:
         // vk initialisation objects
         vk::Instance m_instance;
@@ -500,7 +514,7 @@ namespace vg
         std::vector<vk::Image> m_swapChainImages;
         std::vector<vk::ImageView> m_swapChainImageViews;
 
-        //VmaAllocator m_allocator;
+        VmaAllocator m_allocator;
 
         GLFWwindow*  m_window;
         const int m_width = 1600;
@@ -541,11 +555,24 @@ public:
     {
         createRenderPass();
         createGraphicsPipeline();
+        createFramebuffers();
+        createCommandPool();
+        createCommandBuffers();
+        createSemaphores();
     }
 
     ~App()
     {
+        m_context.getDevice().destroySemaphore(m_imageAvailableSemaphore);
+        m_context.getDevice().destroySemaphore(m_renderFinishedSemaphore);
+
+        m_context.getDevice().destroyCommandPool(m_commandPool);
+        for (const auto framebuffer : m_swapChainFramebuffers)
+            m_context.getDevice().destroyFramebuffer(framebuffer);
+
+        m_context.getDevice().destroyPipeline(m_graphicsPipeline);
         m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
+        m_context.getDevice().destroyRenderPass(m_renderpass);
         // cleanup here
     }
 
@@ -589,16 +616,156 @@ public:
         colorBlending.attachmentCount = 1;
         colorBlending.setPAttachments(&colorBlendAttachment);
 
-        std::array<vk::DynamicState, 2> dynamicStates = { vk::DynamicState::eViewport, vk::DynamicState::eLineWidth };
+        //std::array<vk::DynamicState, 2> dynamicStates = { vk::DynamicState::eViewport, vk::DynamicState::eLineWidth };
 
-        vk::PipelineDynamicStateCreateInfo dynamicState({}, dynamicStates.size(), dynamicStates.data());
+        //vk::PipelineDynamicStateCreateInfo dynamicState({}, dynamicStates.size(), dynamicStates.data());
 
         vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
 
         m_pipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutInfo);
+        
+        vk::GraphicsPipelineCreateInfo pipelineInfo;
+        pipelineInfo.stageCount = 2;
+        pipelineInfo.pStages = shaderStages;
+        pipelineInfo.pVertexInputState = &vertexInputInfo;
+        pipelineInfo.pInputAssemblyState = &inputAssembly;
+        pipelineInfo.pViewportState = &viewportState;
+        pipelineInfo.pRasterizationState = &rasterizer;
+        pipelineInfo.pMultisampleState = &mulitsampling;
+        pipelineInfo.pDepthStencilState = nullptr;
+        pipelineInfo.pColorBlendState = &colorBlending;
+        pipelineInfo.pDynamicState = nullptr;// &dynamicState;
+
+        pipelineInfo.layout = m_pipelineLayout;
+        pipelineInfo.renderPass = m_renderpass;
+        pipelineInfo.subpass = 0;   // this is an index
+        // missing: pipeline derivation
+        
+        m_graphicsPipeline = m_context.getDevice().createGraphicsPipeline(nullptr, pipelineInfo);
 
         m_context.getDevice().destroyShaderModule(vertShaderModule);
         m_context.getDevice().destroyShaderModule(fragShaderModule);
+    }
+
+    void createRenderPass()
+    {
+        vk::AttachmentDescription colorAttachment({}, m_context.getSwapChainImageFormat(),
+            vk::SampleCountFlagBits::e1,
+            vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,            // load store op
+            vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
+            vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR
+        );
+
+        vk::AttachmentReference colorAttachmentRef(0, vk::ImageLayout::eColorAttachmentOptimal);
+
+        vk::SubpassDependency dependency(VK_SUBPASS_EXTERNAL, 0,
+            vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
+            {}, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::DependencyFlagBits::eByRegion);
+
+
+        vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics,
+            0, nullptr,                 // input attachments (standard values)
+            1, &colorAttachmentRef);    // color attachments: layout (location = 0) out -> colorAttachmentRef is at index 0
+                                        // other attachment at standard values: Resolve, DepthStencil, Preserved
+
+        vk::RenderPassCreateInfo renderpassInfo({}, 1, &colorAttachment, 1, &subpass, 1, &dependency);
+
+        m_renderpass = m_context.getDevice().createRenderPass(renderpassInfo);
+
+    }
+
+    void createFramebuffers()
+    {
+        m_swapChainFramebuffers.resize(m_context.getSwapChainImageViews().size());
+        for (size_t i = 0; i < m_context.getSwapChainImageViews().size(); i++)
+        {
+            vk::ImageView attachments[] = { m_context.getSwapChainImageViews().at(i) };
+
+            vk::FramebufferCreateInfo framebufferInfo({}, m_renderpass,
+                1, attachments,
+                m_context.getSwapChainExtent().width,
+                m_context.getSwapChainExtent().height,
+                1);
+
+            m_swapChainFramebuffers.at(i) = m_context.getDevice().createFramebuffer(framebufferInfo);
+        }
+    }
+
+    void createCommandPool()
+    {
+        auto queueFamilyIndices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
+
+        vk::CommandPoolCreateInfo poolInfo({}, queueFamilyIndices.graphicsFamily.value());
+
+        m_commandPool = m_context.getDevice().createCommandPool(poolInfo);
+    }
+
+    void createCommandBuffers()
+    {
+        vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, m_swapChainFramebuffers.size());
+
+        m_commandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
+
+        for (auto i = 0; i < m_commandBuffers.size(); i++)
+        {
+            vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+
+            // begin recording
+            m_commandBuffers.at(i).begin(beginInfo);
+
+            vk::ClearValue clearColor(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
+            vk::RenderPassBeginInfo renderpassInfo(m_renderpass, m_swapChainFramebuffers.at(i), { {0, 0}, m_context.getSwapChainExtent() }, 1, &clearColor);
+            
+            /////////////////////////////
+            // actual commands start here
+            /////////////////////////////
+            m_commandBuffers.at(i).beginRenderPass(renderpassInfo, vk::SubpassContents::eInline);
+
+            m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
+
+            m_commandBuffers.at(i).draw(3, 1, 0, 0);
+
+            m_commandBuffers.at(i).endRenderPass();
+
+            // stop recording
+            m_commandBuffers.at(i).end();
+        }
+    }
+
+    void createSemaphores()
+    {
+        vk::SemaphoreCreateInfo semaInfo;
+        m_imageAvailableSemaphore = m_context.getDevice().createSemaphore(semaInfo);
+        m_renderFinishedSemaphore = m_context.getDevice().createSemaphore(semaInfo);
+
+    }
+
+    void drawFrame()
+    {
+        uint32_t imageIndex = m_context.getDevice().acquireNextImageKHR(m_context.getSwapChain(), std::numeric_limits<uint64_t>::max(), m_imageAvailableSemaphore, nullptr).value;
+
+        vk::Semaphore waitSemaphores[] = { m_imageAvailableSemaphore };
+        vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+        vk::Semaphore signalSemaphores[] = { m_renderFinishedSemaphore };
+
+        vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
+
+        m_context.getDevice().waitIdle();
+
+        m_context.getGraphicsQueue().submit(submitInfo, nullptr);
+
+        m_context.getDevice().waitIdle();
+
+        std::array<vk::SwapchainKHR, 1> swapChains = { m_context.getSwapChain() };
+        vk::Result result;
+        vk::PresentInfoKHR presentInfo(1, signalSemaphores, swapChains.size(), swapChains.data(), &imageIndex, &result);
+
+
+        if(vk::Result::eSuccess != m_context.getPresentQueue().presentKHR(presentInfo))
+            throw std::runtime_error("Failed to present");
+
+        if (result != vk::Result::eSuccess)
+            throw std::runtime_error("Failed to present");
     }
 
     void mainLoop()
@@ -606,12 +773,26 @@ public:
         while (!glfwWindowShouldClose(m_context.getWindow()))
         {
             glfwPollEvents();
+            drawFrame();
         }
     }
 
 private:
     vg::Context m_context;
+
+    vk::RenderPass m_renderpass;
+
     vk::PipelineLayout m_pipelineLayout;
+    vk::Pipeline m_graphicsPipeline;
+
+    std::vector<vk::Framebuffer> m_swapChainFramebuffers;
+
+    vk::CommandPool m_commandPool;
+    std::vector<vk::CommandBuffer> m_commandBuffers;
+
+    vk::Semaphore m_imageAvailableSemaphore;
+    vk::Semaphore m_renderFinishedSemaphore;
+
 };
 
 
@@ -625,6 +806,7 @@ int main() {
     catch (const std::exception& e)
     {
         std::cerr << e.what() << std::endl;
+        std::terminate();
         return EXIT_FAILURE;
     }
 
