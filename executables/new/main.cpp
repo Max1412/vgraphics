@@ -497,6 +497,8 @@ namespace vg
 
         VmaAllocator getAllocator() const { return m_allocator; }
 
+        const int max_frames_in_flight = 3;
+
     private:
         // vk initialisation objects
         vk::Instance m_instance;
@@ -519,6 +521,7 @@ namespace vg
         GLFWwindow*  m_window;
         const int m_width = 1600;
         const int m_height = 900;
+
     };
 
 }
@@ -558,13 +561,18 @@ public:
         createFramebuffers();
         createCommandPool();
         createCommandBuffers();
-        createSemaphores();
+        createSyncObjects();
     }
 
     ~App()
     {
-        m_context.getDevice().destroySemaphore(m_imageAvailableSemaphore);
-        m_context.getDevice().destroySemaphore(m_renderFinishedSemaphore);
+        for (int i = 0; i < m_context.max_frames_in_flight; i++)
+        {
+            m_context.getDevice().destroySemaphore(m_imageAvailableSemaphores.at(i));
+            m_context.getDevice().destroySemaphore(m_renderFinishedSemaphores.at(i));
+            m_context.getDevice().destroyFence(m_inFlightFences.at(i));
+
+        }
 
         m_context.getDevice().destroyCommandPool(m_commandPool);
         for (const auto framebuffer : m_swapChainFramebuffers)
@@ -740,25 +748,39 @@ public:
         }
     }
 
-    void createSemaphores()
+    void createSyncObjects()
     {
+        m_imageAvailableSemaphores.resize(m_context.max_frames_in_flight);
+        m_renderFinishedSemaphores.resize(m_context.max_frames_in_flight);
+        m_inFlightFences.resize(m_context.max_frames_in_flight);
+
         vk::SemaphoreCreateInfo semaInfo;
-        m_imageAvailableSemaphore = m_context.getDevice().createSemaphore(semaInfo);
-        m_renderFinishedSemaphore = m_context.getDevice().createSemaphore(semaInfo);
+        vk::FenceCreateInfo fenceInfo(vk::FenceCreateFlagBits::eSignaled);
+
+        for(int i = 0; i < m_context.max_frames_in_flight; i++)
+        {
+            m_imageAvailableSemaphores.at(i) = m_context.getDevice().createSemaphore(semaInfo);
+            m_renderFinishedSemaphores.at(i) = m_context.getDevice().createSemaphore(semaInfo);
+            m_inFlightFences.at(i) = m_context.getDevice().createFence(fenceInfo);
+        }
 
     }
 
     void drawFrame()
     {
-        uint32_t imageIndex = m_context.getDevice().acquireNextImageKHR(m_context.getSwapChain(), std::numeric_limits<uint64_t>::max(), m_imageAvailableSemaphore, nullptr).value;
+        // wait for the last frame to be finished
+        m_context.getDevice().waitForFences(m_inFlightFences.at(m_currentFrame), VK_TRUE, std::numeric_limits<uint64_t>::max());
+        m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
 
-        vk::Semaphore waitSemaphores[] = { m_imageAvailableSemaphore };
+        uint32_t imageIndex = m_context.getDevice().acquireNextImageKHR(m_context.getSwapChain(), std::numeric_limits<uint64_t>::max(), m_imageAvailableSemaphores.at(m_currentFrame), nullptr).value;
+
+        vk::Semaphore waitSemaphores[] = { m_imageAvailableSemaphores.at(m_currentFrame) };
         vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
-        vk::Semaphore signalSemaphores[] = { m_renderFinishedSemaphore };
+        vk::Semaphore signalSemaphores[] = { m_renderFinishedSemaphores.at(m_currentFrame) };
 
         vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
 
-        m_context.getGraphicsQueue().submit(submitInfo, nullptr);
+        m_context.getGraphicsQueue().submit(submitInfo, m_inFlightFences.at(m_currentFrame));
 
         std::array<vk::SwapchainKHR, 1> swapChains = { m_context.getSwapChain() };
         vk::Result result;
@@ -770,6 +792,10 @@ public:
 
         if (result != vk::Result::eSuccess)
             throw std::runtime_error("Failed to present");
+
+        m_context.getPresentQueue().waitIdle();
+
+        m_currentFrame = (m_currentFrame + 1) % m_context.max_frames_in_flight;
     }
 
     void mainLoop()
@@ -779,6 +805,8 @@ public:
             glfwPollEvents();
             drawFrame();
         }
+
+        m_context.getDevice().waitIdle();
     }
 
 private:
@@ -794,9 +822,10 @@ private:
     vk::CommandPool m_commandPool;
     std::vector<vk::CommandBuffer> m_commandBuffers;
 
-    vk::Semaphore m_imageAvailableSemaphore;
-    vk::Semaphore m_renderFinishedSemaphore;
-
+    std::vector<vk::Semaphore> m_imageAvailableSemaphores;
+    std::vector<vk::Semaphore> m_renderFinishedSemaphores;
+    std::vector<vk::Fence> m_inFlightFences;
+    int m_currentFrame = 0;
 };
 
 
