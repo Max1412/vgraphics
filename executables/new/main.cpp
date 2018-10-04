@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#define VMA_IMPLEMENTATION
 #include "vma/vk_mem_alloc.h"
 
 #include <fstream>
@@ -53,8 +54,8 @@ struct Vertex
 };
 
 const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
     {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
 };
 
@@ -136,8 +137,22 @@ namespace vg
             pickPhysicalDevice();
             createLogicalDevice();
 
+            createAllocator();
+
             createSwapChain();
             createImageViews();
+        }
+
+        void createAllocator()
+        {
+            VmaAllocatorCreateInfo createInfo = {};
+            createInfo.device = m_device;
+            createInfo.physicalDevice = m_phsyicalDevice;
+            //createInfo.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
+            auto result = vmaCreateAllocator(&createInfo, &m_allocator);
+
+            if (result != VK_SUCCESS)
+                throw std::runtime_error("Failed to create Allocator");
         }
 
         void createInstance()
@@ -252,7 +267,7 @@ namespace vg
 
             vk::DebugUtilsMessengerCreateInfoEXT createInfo(
                 {},
-                sevFlags::eError | sevFlags::eWarning | sevFlags::eVerbose, // | sevFlags::eInfo,
+                sevFlags::eError | sevFlags::eWarning | sevFlags::eVerbose | sevFlags::eInfo,
                 typeFlags::eGeneral | typeFlags::ePerformance | typeFlags::eValidation,
                 reinterpret_cast<PFN_vkDebugUtilsMessengerCallbackEXT>(debugCallback));
 
@@ -542,7 +557,10 @@ namespace vg
         vk::Queue getGraphicsQueue() const { return m_graphicsQueue; }
         vk::Queue getPresentQueue() const { return m_presentQueue;  }
 
-        VmaAllocator getAllocator() const { return m_allocator; }
+        VmaAllocator getAllocator()
+        {
+            return m_allocator; 
+        }
 
         const int max_frames_in_flight = 3;
 
@@ -566,8 +584,8 @@ namespace vg
         std::vector<vk::Image> m_swapChainImages;
         std::vector<vk::ImageView> m_swapChainImageViews;
 
-        VmaAllocator m_allocator;
-
+        VmaAllocator m_allocator = nullptr;
+        
         GLFWwindow*  m_window;
         int m_width = 1600;
         int m_height = 900;
@@ -611,12 +629,17 @@ public:
         createGraphicsPipeline();
         createFramebuffers();
         createCommandPool();
+
+        createVertexBuffer();
+
         createCommandBuffers();
         createSyncObjects();
     }
 
     ~App()
     {
+        vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_vertexBuffer), m_vertexBufferAllocation);
+
         for (int i = 0; i < m_context.max_frames_in_flight; i++)
         {
             m_context.getDevice().destroySemaphore(m_imageAvailableSemaphores.at(i));
@@ -634,6 +657,24 @@ public:
         // cleanup here
     }
 
+    void createVertexBuffer()
+    {
+        vk::BufferCreateInfo bufferInfo({}, sizeof(vertices.at(0)) * vertices.size(), vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive);
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+        auto result = vmaCreateBuffer(m_context.getAllocator(),
+            reinterpret_cast<VkBufferCreateInfo*>(&bufferInfo), &allocInfo, reinterpret_cast<VkBuffer*>(&m_vertexBuffer), &m_vertexBufferAllocation, &m_vertexBufferAllocInfo);
+
+        if (result != VK_SUCCESS)
+            throw std::runtime_error("Buffer creation failed");
+
+        void* dataPtr = m_context.getDevice().mapMemory(m_vertexBufferAllocInfo.deviceMemory, m_vertexBufferAllocInfo.offset, m_vertexBufferAllocInfo.size, {});
+        memcpy(dataPtr, vertices.data(), m_vertexBufferAllocInfo.size);
+        m_context.getDevice().unmapMemory(m_vertexBufferAllocInfo.deviceMemory);
+    }
+
+    // base
     void recreateSwapChain()
     {
         int width = 0, height = 0;
@@ -686,7 +727,13 @@ public:
 
         const vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
-        vk::PipelineVertexInputStateCreateInfo vertexInputInfo({}, 0, nullptr, 0, nullptr);
+
+        auto bindingDescription = Vertex::getBindingDescription();
+        auto attributeDescriptions = Vertex::getAttributeDescriptions();
+        vk::PipelineVertexInputStateCreateInfo vertexInputInfo({}, 1, &bindingDescription, static_cast<uint32_t>(attributeDescriptions.size()), attributeDescriptions.data());
+
+               
+
         vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);
 
         vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(m_context.getWidth()), static_cast<float>(m_context.getHeight()), 0.0f, 1.0f);
@@ -830,7 +877,9 @@ public:
 
             m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
-            m_commandBuffers.at(i).draw(3, 1, 0, 0);
+            m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBuffer, 0ull);
+
+            m_commandBuffers.at(i).draw(static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
             m_commandBuffers.at(i).endRenderPass();
 
@@ -897,7 +946,7 @@ public:
         {
             presentResult = m_context.getPresentQueue().presentKHR(presentInfo);
         }
-        catch (const vk::OutOfDateKHRError& e)
+        catch (const vk::OutOfDateKHRError&)
         {
             m_context.setFrameBufferResized(false);
             recreateSwapChain();
@@ -945,6 +994,11 @@ private:
     std::vector<vk::Semaphore> m_renderFinishedSemaphores;
     std::vector<vk::Fence> m_inFlightFences;
     int m_currentFrame = 0;
+
+    vk::Buffer m_vertexBuffer;
+    VmaAllocation m_vertexBufferAllocation;
+    VmaAllocationInfo m_vertexBufferAllocInfo;
+
 };
 
 
