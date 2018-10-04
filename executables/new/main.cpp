@@ -24,6 +24,40 @@ const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_N
     constexpr bool enableValidationLayers = true;
 #endif
 
+struct Vertex
+{
+    glm::vec2 pos;
+    glm::vec3 color;
+
+    static vk::VertexInputBindingDescription getBindingDescription()
+    {
+        vk::VertexInputBindingDescription desc(0, sizeof(Vertex), vk::VertexInputRate::eVertex);
+        return desc;
+    }
+
+    static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions;
+        attributeDescriptions.at(0).binding = 0;
+        attributeDescriptions.at(0).location = 0;
+        attributeDescriptions.at(0).format = vk::Format::eR32G32Sfloat;
+        attributeDescriptions.at(0).offset = offsetof(Vertex, pos);
+
+        attributeDescriptions.at(1).binding = 0;
+        attributeDescriptions.at(1).location = 1;
+        attributeDescriptions.at(1).format = vk::Format::eR32G32B32Sfloat;
+        attributeDescriptions.at(1).offset = offsetof(Vertex, color);
+
+        return attributeDescriptions;
+    }
+};
+
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+};
+
 namespace help
 {
     VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pCallback) {
@@ -79,8 +113,17 @@ namespace vg
         {
             glfwInit();
             glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-            glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+            //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
             m_window = glfwCreateWindow(m_width, m_height, "Vulkan", nullptr, nullptr);
+            glfwSetWindowUserPointer(m_window, this);
+            glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
+
+        }
+
+        static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
+        {
+            auto context = reinterpret_cast<Context*>(glfwGetWindowUserPointer(window));
+            context->m_frameBufferResized = true;
         }
 
         void initVulkan()
@@ -415,6 +458,7 @@ namespace vg
             }
             else 
             {
+                glfwGetFramebufferSize(m_window, &m_width, &m_height);
                 VkExtent2D actualExtent = { static_cast<uint32_t>(m_width), static_cast<uint32_t>(m_height) };
                 actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
                 actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
@@ -502,6 +546,9 @@ namespace vg
 
         const int max_frames_in_flight = 3;
 
+        void setFrameBufferResized(bool resized) { m_frameBufferResized = resized; }
+        bool getFrameBufferResized() const { return m_frameBufferResized; }
+
     private:
         // vk initialisation objects
         vk::Instance m_instance;
@@ -522,8 +569,9 @@ namespace vg
         VmaAllocator m_allocator;
 
         GLFWwindow*  m_window;
-        const int m_width = 1600;
-        const int m_height = 900;
+        int m_width = 1600;
+        int m_height = 900;
+        bool m_frameBufferResized = false;
 
     };
 
@@ -574,7 +622,6 @@ public:
             m_context.getDevice().destroySemaphore(m_imageAvailableSemaphores.at(i));
             m_context.getDevice().destroySemaphore(m_renderFinishedSemaphores.at(i));
             m_context.getDevice().destroyFence(m_inFlightFences.at(i));
-
         }
 
         m_context.getDevice().destroyCommandPool(m_commandPool);
@@ -585,6 +632,45 @@ public:
         m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
         m_context.getDevice().destroyRenderPass(m_renderpass);
         // cleanup here
+    }
+
+    void recreateSwapChain()
+    {
+        int width = 0, height = 0;
+        while (width == 0 || height == 0)
+        {
+            glfwGetFramebufferSize(m_context.getWindow(), &width, &height);
+            glfwWaitEvents();
+        }
+
+        m_context.getDevice().waitIdle();
+
+        cleanUpSwapchain();
+
+        m_context.createSwapChain();
+        m_context.createImageViews();
+        createRenderPass();
+        createGraphicsPipeline();
+        createFramebuffers();
+        createCommandBuffers();
+    }
+
+    // base
+    void cleanUpSwapchain()
+    {
+        for (auto& scfb : m_swapChainFramebuffers)
+            m_context.getDevice().destroyFramebuffer(scfb);
+
+        m_context.getDevice().freeCommandBuffers(m_commandPool, m_commandBuffers);
+
+        m_context.getDevice().destroyPipeline(m_graphicsPipeline);
+        m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
+        m_context.getDevice().destroyRenderPass(m_renderpass);
+
+        for (auto& sciv : m_context.getSwapChainImageViews())
+            m_context.getDevice().destroyImageView(sciv);
+
+        m_context.getDevice().destroySwapchainKHR(m_context.getSwapChain());
     }
 
     void createGraphicsPipeline()
@@ -693,6 +779,7 @@ public:
 
     }
 
+    // base
     void createFramebuffers()
     {
         m_swapChainFramebuffers.resize(m_context.getSwapChainImageViews().size());
@@ -710,6 +797,7 @@ public:
         }
     }
 
+    // base
     void createCommandPool()
     {
         auto queueFamilyIndices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
@@ -751,6 +839,7 @@ public:
         }
     }
 
+    // base
     void createSyncObjects()
     {
         m_imageAvailableSemaphores.resize(m_context.max_frames_in_flight);
@@ -769,13 +858,25 @@ public:
 
     }
 
+    // base
     void drawFrame()
     {
         // wait for the last frame to be finished
         m_context.getDevice().waitForFences(m_inFlightFences.at(m_currentFrame), VK_TRUE, std::numeric_limits<uint64_t>::max());
-        m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
 
-        uint32_t imageIndex = m_context.getDevice().acquireNextImageKHR(m_context.getSwapChain(), std::numeric_limits<uint64_t>::max(), m_imageAvailableSemaphores.at(m_currentFrame), nullptr).value;
+        auto nextImageResult = m_context.getDevice().acquireNextImageKHR(m_context.getSwapChain(), std::numeric_limits<uint64_t>::max(), m_imageAvailableSemaphores.at(m_currentFrame), nullptr);
+        uint32_t imageIndex = nextImageResult.value;
+
+        // maybe change this to try/catch as shown below
+        if(nextImageResult.result == vk::Result::eErrorOutOfDateKHR)
+        {
+            recreateSwapChain();
+            return;
+        }
+        else if (nextImageResult.result != vk::Result::eSuccess && nextImageResult.result != vk::Result::eSuboptimalKHR)
+        {
+            throw std::runtime_error("Failed to acquire swap chain image");
+        }
 
         vk::Semaphore waitSemaphores[] = { m_imageAvailableSemaphores.at(m_currentFrame) };
         vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
@@ -783,18 +884,33 @@ public:
 
         vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
 
+        m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
         m_context.getGraphicsQueue().submit(submitInfo, m_inFlightFences.at(m_currentFrame));
 
         std::array<vk::SwapchainKHR, 1> swapChains = { m_context.getSwapChain() };
-        vk::Result result;
-        vk::PresentInfoKHR presentInfo(1, signalSemaphores, static_cast<uint32_t>(swapChains.size()), swapChains.data(), &imageIndex, &result);
 
+        vk::PresentInfoKHR presentInfo(1, signalSemaphores, static_cast<uint32_t>(swapChains.size()), swapChains.data(), &imageIndex, nullptr);
 
-        if(vk::Result::eSuccess != m_context.getPresentQueue().presentKHR(presentInfo))
-            throw std::runtime_error("Failed to present");
+        vk::Result presentResult = vk::Result::eSuccess;
 
-        if (result != vk::Result::eSuccess)
-            throw std::runtime_error("Failed to present");
+        try
+        {
+            presentResult = m_context.getPresentQueue().presentKHR(presentInfo);
+        }
+        catch (const vk::OutOfDateKHRError& e)
+        {
+            m_context.setFrameBufferResized(false);
+            recreateSwapChain();
+        }
+
+        if (presentResult == vk::Result::eSuboptimalKHR || m_context.getFrameBufferResized())
+        {
+            m_context.setFrameBufferResized(false);
+            recreateSwapChain();
+        }
+
+        //if (result != vk::Result::eSuccess)
+        //    throw std::runtime_error("Failed to present");
 
         m_context.getPresentQueue().waitIdle();
 
@@ -832,7 +948,8 @@ private:
 };
 
 
-int main() {
+int main()
+{
     App app;
 
     try
