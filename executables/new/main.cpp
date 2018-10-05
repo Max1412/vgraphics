@@ -94,6 +94,8 @@ namespace vg
 
         ~Context()
         {
+            vmaDestroyAllocator(m_allocator);
+
             for (const auto& imageView : m_swapChainImageViews)
             {
                 m_device.destroyImageView(imageView);
@@ -267,7 +269,7 @@ namespace vg
 
             vk::DebugUtilsMessengerCreateInfoEXT createInfo(
                 {},
-                sevFlags::eError | sevFlags::eWarning | sevFlags::eVerbose | sevFlags::eInfo,
+                sevFlags::eError | sevFlags::eWarning | sevFlags::eVerbose,// | sevFlags::eInfo,
                 typeFlags::eGeneral | typeFlags::ePerformance | typeFlags::eValidation,
                 reinterpret_cast<PFN_vkDebugUtilsMessengerCallbackEXT>(debugCallback));
 
