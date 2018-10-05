@@ -307,8 +307,11 @@ namespace vg
         {
             std::optional<uint32_t> graphicsFamily;
             std::optional<uint32_t> presentFamily;
+            std::optional<uint32_t> transferFamily;
+            std::optional<uint32_t> computeFamily;
 
-            bool isComplete() const { return graphicsFamily.has_value() && presentFamily.has_value(); }
+            bool isComplete() const { return graphicsFamily.has_value() && presentFamily.has_value()
+                                      && transferFamily.has_value() && computeFamily.has_value(); }
         };
 
         bool isDeviceSuitable(vk::PhysicalDevice physDevice)
@@ -360,7 +363,7 @@ namespace vg
             QueueFamilyIndices indices;
             auto qfprops = physDevice.getQueueFamilyProperties();
 
-            int i = 0;
+            uint32_t i = 0;
             for (const auto& queueFamily : qfprops)
             {
                 if (queueFamily.queueCount > 0 && queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
@@ -369,6 +372,12 @@ namespace vg
                 bool presentSupport = physDevice.getSurfaceSupportKHR(i, m_surface);
                 if (queueFamily.queueCount > 0 && presentSupport)
                     indices.presentFamily = i;
+
+                if (queueFamily.queueCount > 0 && queueFamily.queueFlags & vk::QueueFlagBits::eTransfer && !(queueFamily.queueFlags & vk::QueueFlagBits::eGraphics))
+                    indices.transferFamily = i;
+
+                if (queueFamily.queueCount > 0 && queueFamily.queueFlags & vk::QueueFlagBits::eCompute && !(queueFamily.queueFlags & vk::QueueFlagBits::eGraphics))
+                    indices.computeFamily = i;
 
                 if (indices.isComplete())
                     break;
@@ -385,7 +394,7 @@ namespace vg
             QueueFamilyIndices indices = findQueueFamilies(m_phsyicalDevice);
 
             std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
-            std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+            std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value(), indices.transferFamily.value(), indices.computeFamily.value() };
 
             float queuePriority = 1.0f;
             for (uint32_t queueFamily : uniqueQueueFamilies)
@@ -411,6 +420,9 @@ namespace vg
 
             m_presentQueue = m_device.getQueue(indices.presentFamily.value(), 0);
             m_graphicsQueue = m_device.getQueue(indices.graphicsFamily.value(), 0);
+            m_transferQueue = m_device.getQueue(indices.transferFamily.value(), 0);
+            m_computeQueue = m_device.getQueue(indices.computeFamily.value(), 0);
+
         }
 
         void createSurface()
@@ -556,6 +568,8 @@ namespace vg
 
         vk::Queue getGraphicsQueue() const { return m_graphicsQueue; }
         vk::Queue getPresentQueue() const { return m_presentQueue;  }
+        vk::Queue getTransferQueue() const { return m_transferQueue; }
+        vk::Queue getComputeQueue() const { return m_computeQueue; }
 
         VmaAllocator getAllocator()
         {
@@ -574,6 +588,9 @@ namespace vg
         vk::PhysicalDevice m_phsyicalDevice;
         vk::Device m_device;
         vk::Queue m_graphicsQueue;
+
+        vk::Queue m_transferQueue;
+        vk::Queue m_computeQueue;
 
         // presentation objects
         vk::SurfaceKHR m_surface;
@@ -628,7 +645,7 @@ public:
         createRenderPass();
         createGraphicsPipeline();
         createFramebuffers();
-        createCommandPool();
+        createCommandPools();
 
         createVertexBuffer();
 
@@ -638,7 +655,7 @@ public:
 
     ~App()
     {
-        vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_vertexBuffer), m_vertexBufferAllocation);
+        vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_vertexBufferInfo.m_Buffer), m_vertexBufferInfo.m_BufferAllocation);
 
         for (int i = 0; i < m_context.max_frames_in_flight; i++)
         {
@@ -648,6 +665,9 @@ public:
         }
 
         m_context.getDevice().destroyCommandPool(m_commandPool);
+        m_context.getDevice().destroyCommandPool(m_transferCommandPool);
+        m_context.getDevice().destroyCommandPool(m_computeCommandPool);
+
         for (const auto framebuffer : m_swapChainFramebuffers)
             m_context.getDevice().destroyFramebuffer(framebuffer);
 
@@ -657,22 +677,81 @@ public:
         // cleanup here
     }
 
-    void createVertexBuffer()
+    // base
+    struct BufferInfo
     {
-        vk::BufferCreateInfo bufferInfo({}, sizeof(vertices.at(0)) * vertices.size(), vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive);
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+        vk::Buffer m_Buffer = nullptr;
+        VmaAllocation m_BufferAllocation = nullptr;
+        VmaAllocationInfo m_BufferAllocInfo = {};
+    };
 
-        auto result = vmaCreateBuffer(m_context.getAllocator(),
-            reinterpret_cast<VkBufferCreateInfo*>(&bufferInfo), &allocInfo, reinterpret_cast<VkBuffer*>(&m_vertexBuffer), &m_vertexBufferAllocation, &m_vertexBufferAllocInfo);
+    // base 
+    BufferInfo createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive)
+    {
+        BufferInfo bufferInfo;
+
+        vk::BufferCreateInfo bufferCreateInfo({}, size, usage, sharingMode);
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = properties;
+
+        const auto result = vmaCreateBuffer(m_context.getAllocator(),
+            reinterpret_cast<VkBufferCreateInfo*>(&bufferCreateInfo), &allocInfo, reinterpret_cast<VkBuffer*>(&bufferInfo.m_Buffer), &bufferInfo.m_BufferAllocation, &bufferInfo.m_BufferAllocInfo);
 
         if (result != VK_SUCCESS)
             throw std::runtime_error("Buffer creation failed");
 
-        void* dataPtr = m_context.getDevice().mapMemory(m_vertexBufferAllocInfo.deviceMemory, m_vertexBufferAllocInfo.offset, m_vertexBufferAllocInfo.size, {});
-        memcpy(dataPtr, vertices.data(), m_vertexBufferAllocInfo.size);
-        m_context.getDevice().unmapMemory(m_vertexBufferAllocInfo.deviceMemory);
+        return bufferInfo;
     }
+
+    // base
+    void copyBuffer(const vk::Buffer src, const vk::Buffer dst, const vk::DeviceSize size)
+    {
+        vk::CommandBufferAllocateInfo allocInfo(m_transferCommandPool, vk::CommandBufferLevel::ePrimary, 1);
+
+        auto commandBuffer = m_context.getDevice().allocateCommandBuffers(allocInfo).at(0);
+
+        vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+
+        vk::BufferCopy copyRegion(0, 0, size);
+
+        commandBuffer.copyBuffer(src, dst, copyRegion);
+        commandBuffer.end();
+
+        vk::SubmitInfo submitInfo;
+        submitInfo.setCommandBufferCount(1);
+        submitInfo.setPCommandBuffers(&commandBuffer);
+
+        m_context.getTransferQueue().submit(submitInfo, nullptr);
+        m_context.getTransferQueue().waitIdle();
+
+        m_context.getDevice().freeCommandBuffers(m_transferCommandPool, 1, &commandBuffer);
+    }
+
+    template <typename T>
+    BufferInfo fillBufferTroughStagedTransfer(const std::vector<T>& data, const vk::BufferUsageFlags actualBufferUsage)
+    {
+        vk::DeviceSize bufferSize = sizeof(T) * data.size();
+
+        auto stagingBufferInfo = createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eConcurrent);
+
+        void* dataPtr = m_context.getDevice().mapMemory(stagingBufferInfo.m_BufferAllocInfo.deviceMemory, stagingBufferInfo.m_BufferAllocInfo.offset, stagingBufferInfo.m_BufferAllocInfo.size, {});
+        memcpy(dataPtr, vertices.data(), stagingBufferInfo.m_BufferAllocInfo.size);
+        m_context.getDevice().unmapMemory(stagingBufferInfo.m_BufferAllocInfo.deviceMemory);
+
+        auto returnBufferInfo = createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | actualBufferUsage, VMA_MEMORY_USAGE_GPU_ONLY, vk::SharingMode::eConcurrent);
+
+        copyBuffer(stagingBufferInfo.m_Buffer, returnBufferInfo.m_Buffer, bufferSize);
+
+        vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(returnBufferInfo.m_Buffer), returnBufferInfo.m_BufferAllocation);
+
+        return returnBufferInfo;
+    }
+
+    void createVertexBuffer()
+    {
+        m_vertexBufferInfo = fillBufferTroughStagedTransfer(vertices, vk::BufferUsageFlagBits::eVertexBuffer);
+    }
+
 
     // base
     void recreateSwapChain()
@@ -845,13 +924,21 @@ public:
     }
 
     // base
-    void createCommandPool()
+    void createCommandPools()
     {
         auto queueFamilyIndices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
 
-        vk::CommandPoolCreateInfo poolInfo({}, queueFamilyIndices.graphicsFamily.value());
+        // pool for graphics
+        vk::CommandPoolCreateInfo graphicsPoolInfo({}, queueFamilyIndices.graphicsFamily.value());
+        m_commandPool = m_context.getDevice().createCommandPool(graphicsPoolInfo);
 
-        m_commandPool = m_context.getDevice().createCommandPool(poolInfo);
+        // pool for transfer
+        vk::CommandPoolCreateInfo transferPoolInfo({}, queueFamilyIndices.transferFamily.value());
+        m_transferCommandPool = m_context.getDevice().createCommandPool(transferPoolInfo);
+
+        // pool for compute
+        vk::CommandPoolCreateInfo computePoolInfo({}, queueFamilyIndices.computeFamily.value());
+        m_computeCommandPool = m_context.getDevice().createCommandPool(transferPoolInfo);
     }
 
     void createCommandBuffers()
@@ -877,7 +964,7 @@ public:
 
             m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
-            m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBuffer, 0ull);
+            m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBufferInfo.m_Buffer, 0ull);
 
             m_commandBuffers.at(i).draw(static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
@@ -988,6 +1075,9 @@ private:
     std::vector<vk::Framebuffer> m_swapChainFramebuffers;
 
     vk::CommandPool m_commandPool;
+    vk::CommandPool m_transferCommandPool;
+    vk::CommandPool m_computeCommandPool;
+
     std::vector<vk::CommandBuffer> m_commandBuffers;
 
     std::vector<vk::Semaphore> m_imageAvailableSemaphores;
@@ -995,9 +1085,8 @@ private:
     std::vector<vk::Fence> m_inFlightFences;
     int m_currentFrame = 0;
 
-    vk::Buffer m_vertexBuffer;
-    VmaAllocation m_vertexBufferAllocation;
-    VmaAllocationInfo m_vertexBufferAllocInfo;
+    BufferInfo m_vertexBufferInfo;
+
 
 };
 
