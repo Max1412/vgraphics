@@ -693,6 +693,14 @@ public:
         BufferInfo bufferInfo;
 
         vk::BufferCreateInfo bufferCreateInfo({}, size, usage, sharingMode);
+        if(sharingMode == vk::SharingMode::eConcurrent)
+        {
+            vg::Context::QueueFamilyIndices indices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
+            uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.transferFamily.value() };
+
+            bufferCreateInfo.queueFamilyIndexCount = 2;
+            bufferCreateInfo.pQueueFamilyIndices = queueFamilyIndices;
+        }
         VmaAllocationCreateInfo allocInfo = {};
         allocInfo.usage = properties;
 
@@ -715,7 +723,7 @@ public:
         vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 
         vk::BufferCopy copyRegion(0, 0, size);
-
+        commandBuffer.begin(beginInfo);
         commandBuffer.copyBuffer(src, dst, copyRegion);
         commandBuffer.end();
 
