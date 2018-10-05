@@ -744,7 +744,7 @@ public:
 
         copyBuffer(stagingBufferInfo.m_Buffer, returnBufferInfo.m_Buffer, bufferSize);
 
-        vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(returnBufferInfo.m_Buffer), returnBufferInfo.m_BufferAllocation);
+        vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(stagingBufferInfo.m_Buffer), stagingBufferInfo.m_BufferAllocation);
 
         return returnBufferInfo;
     }
