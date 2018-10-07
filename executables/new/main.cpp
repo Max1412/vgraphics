@@ -54,9 +54,14 @@ struct Vertex
 };
 
 const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0
 };
 
 namespace help
@@ -650,6 +655,7 @@ public:
         createCommandPools();
 
         createVertexBuffer();
+        createIndexBuffer();
 
         createCommandBuffers();
         createSyncObjects();
@@ -688,7 +694,7 @@ public:
     };
 
     // base 
-    BufferInfo createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive)
+    BufferInfo createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0)
     {
         BufferInfo bufferInfo;
 
@@ -703,7 +709,7 @@ public:
         }
         VmaAllocationCreateInfo allocInfo = {};
         allocInfo.usage = properties;
-
+        allocInfo.flags = flags;
         const auto result = vmaCreateBuffer(m_context.getAllocator(),
             reinterpret_cast<VkBufferCreateInfo*>(&bufferCreateInfo), &allocInfo, reinterpret_cast<VkBuffer*>(&bufferInfo.m_Buffer), &bufferInfo.m_BufferAllocation, &bufferInfo.m_BufferAllocInfo);
 
@@ -742,11 +748,10 @@ public:
     {
         vk::DeviceSize bufferSize = sizeof(T) * data.size();
 
-        auto stagingBufferInfo = createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eConcurrent);
+        auto stagingBufferInfo = createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eConcurrent, VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
-        void* dataPtr = m_context.getDevice().mapMemory(stagingBufferInfo.m_BufferAllocInfo.deviceMemory, stagingBufferInfo.m_BufferAllocInfo.offset, stagingBufferInfo.m_BufferAllocInfo.size, {});
-        memcpy(dataPtr, vertices.data(), stagingBufferInfo.m_BufferAllocInfo.size);
-        m_context.getDevice().unmapMemory(stagingBufferInfo.m_BufferAllocInfo.deviceMemory);
+        // staging buffer is persistently mapped, no mapping necessary
+        memcpy(stagingBufferInfo.m_BufferAllocInfo.pMappedData, data.data(), stagingBufferInfo.m_BufferAllocInfo.size); // TODO maybe using this size is wrong
 
         auto returnBufferInfo = createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | actualBufferUsage, VMA_MEMORY_USAGE_GPU_ONLY, vk::SharingMode::eConcurrent);
 
@@ -760,6 +765,11 @@ public:
     void createVertexBuffer()
     {
         m_vertexBufferInfo = fillBufferTroughStagedTransfer(vertices, vk::BufferUsageFlagBits::eVertexBuffer);
+    }
+
+    void createIndexBuffer()
+    {
+        m_indexBufferInfo = fillBufferTroughStagedTransfer(indices, vk::BufferUsageFlagBits::eIndexBuffer);
     }
 
 
@@ -975,8 +985,9 @@ public:
             m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
             m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBufferInfo.m_Buffer, 0ull);
+            m_commandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint16);
 
-            m_commandBuffers.at(i).draw(static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+            m_commandBuffers.at(i).drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
             m_commandBuffers.at(i).endRenderPass();
 
@@ -1096,6 +1107,7 @@ private:
     int m_currentFrame = 0;
 
     BufferInfo m_vertexBufferInfo;
+    BufferInfo m_indexBufferInfo;
 
 
 };
