@@ -56,17 +56,6 @@ struct Vertex
     }
 };
 
-const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0
-};
-
 namespace help
 {
     VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pCallback) {
@@ -697,6 +686,11 @@ public:
         m_context.getDevice().destroyDescriptorPool(m_descriptorPool);
         m_context.getDevice().destroyDescriptorSetLayout(m_descriptorSetLayout);
 
+        for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
+        {
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_uniformBufferInfos.at(i).m_Buffer), m_uniformBufferInfos.at(i).m_BufferAllocation);
+        }
+
         m_context.getDevice().destroyPipeline(m_graphicsPipeline);
         m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
         m_context.getDevice().destroyRenderPass(m_renderpass);
@@ -764,7 +758,7 @@ public:
     }
 
     // base
-    void copyBuffer(const vk::Buffer src, const vk::Buffer dst, const vk::DeviceSize size)
+    void copyBuffer(const vk::Buffer src, const vk::Buffer dst, const vk::DeviceSize size) const
     {
         vk::CommandBufferAllocateInfo allocInfo(m_transferCommandPool, vk::CommandBufferLevel::ePrimary, 1);
 
@@ -776,6 +770,7 @@ public:
         endSingleTimeCommands(commandBuffer, m_context.getTransferQueue(), m_transferCommandPool);
     }
 
+    // base
     template <typename T>
     BufferInfo fillBufferTroughStagedTransfer(const std::vector<T>& data, const vk::BufferUsageFlags actualBufferUsage)
     {
@@ -797,12 +792,12 @@ public:
 
     void createVertexBuffer()
     {
-        m_vertexBufferInfo = fillBufferTroughStagedTransfer(vertices, vk::BufferUsageFlagBits::eVertexBuffer);
+        m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_vertices, vk::BufferUsageFlagBits::eVertexBuffer);
     }
 
     void createIndexBuffer()
     {
-        m_indexBufferInfo = fillBufferTroughStagedTransfer(indices, vk::BufferUsageFlagBits::eIndexBuffer);
+        m_indexBufferInfo = fillBufferTroughStagedTransfer(m_indices, vk::BufferUsageFlagBits::eIndexBuffer);
     }
 
     void createUniformBuffers()
@@ -942,8 +937,6 @@ public:
             createInfo.queueFamilyIndexCount = 2;
             createInfo.pQueueFamilyIndices = queueFamilyIndices;
         }
-
-        returnInfo.m_Image = m_context.getDevice().createImage(createInfo);
 
         VmaAllocationCreateInfo allocInfo = {};
         allocInfo.usage = properties;
@@ -1196,7 +1189,7 @@ public:
 
             m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(i), 0, nullptr);
 
-            m_commandBuffers.at(i).drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+            m_commandBuffers.at(i).drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
 
             m_commandBuffers.at(i).endRenderPass();
 
@@ -1366,6 +1359,17 @@ private:
     // todo structure:
     // re-usable functions and members into baseapp, each app inherits from baseapp
     // make image/buffer creation/copy/... functions member functions of image/buffer/... classes (maybe)
+
+    const std::vector<Vertex> m_vertices = {
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+    };
+
+    const std::vector<uint16_t> m_indices = {
+        0, 1, 2, 2, 3, 0
+    };
 
 };
 
