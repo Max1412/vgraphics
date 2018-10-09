@@ -10,6 +10,9 @@
 #define VMA_IMPLEMENTATION
 #include "vma/vk_mem_alloc.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
+
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -639,8 +642,10 @@ public:
 
         return buffer;
     }
+    inline static const auto s_resourcesPath = std::filesystem::current_path().parent_path().parent_path().append("resources");
 private:
     inline static const auto s_shaderPath = std::filesystem::current_path().parent_path().parent_path().append("shaders");
+
 };
 
 
@@ -655,6 +660,8 @@ public:
         createGraphicsPipeline();
         createFramebuffers();
         createCommandPools();
+
+        createTextureImage();
 
         createVertexBuffer();
         createIndexBuffer();
@@ -685,6 +692,8 @@ public:
         for (const auto framebuffer : m_swapChainFramebuffers)
             m_context.getDevice().destroyFramebuffer(framebuffer);
 
+        vmaDestroyImage(m_context.getAllocator(), m_image.m_Image, m_image.m_ImageAllocation);
+
         m_context.getDevice().destroyDescriptorPool(m_descriptorPool);
         m_context.getDevice().destroyDescriptorSetLayout(m_descriptorSetLayout);
 
@@ -700,6 +709,14 @@ public:
         vk::Buffer m_Buffer = nullptr;
         VmaAllocation m_BufferAllocation = nullptr;
         VmaAllocationInfo m_BufferAllocInfo = {};
+    };
+
+    // base
+    struct ImageInfo
+    {
+        vk::Image m_Image = nullptr;
+        VmaAllocation m_ImageAllocation = nullptr;
+        VmaAllocationInfo m_ImageAllocInfo = {};
     };
 
     struct UniformBufferObject
@@ -751,23 +768,12 @@ public:
     {
         vk::CommandBufferAllocateInfo allocInfo(m_transferCommandPool, vk::CommandBufferLevel::ePrimary, 1);
 
-        auto commandBuffer = m_context.getDevice().allocateCommandBuffers(allocInfo).at(0);
-
-        vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+        auto commandBuffer = beginSingleTimeCommands(m_transferCommandPool);
 
         vk::BufferCopy copyRegion(0, 0, size);
-        commandBuffer.begin(beginInfo);
         commandBuffer.copyBuffer(src, dst, copyRegion);
-        commandBuffer.end();
 
-        vk::SubmitInfo submitInfo;
-        submitInfo.setCommandBufferCount(1);
-        submitInfo.setPCommandBuffers(&commandBuffer);
-
-        m_context.getTransferQueue().submit(submitInfo, nullptr);
-        m_context.getTransferQueue().waitIdle();
-
-        m_context.getDevice().freeCommandBuffers(m_transferCommandPool, 1, &commandBuffer);
+        endSingleTimeCommands(commandBuffer, m_context.getTransferQueue(), m_transferCommandPool);
     }
 
     template <typename T>
@@ -806,6 +812,147 @@ public:
             auto buffer = createBuffer(sizeof(UniformBufferObject), vk::BufferUsageFlagBits::eUniformBuffer, VMA_MEMORY_USAGE_CPU_TO_GPU);
             m_uniformBufferInfos.push_back(buffer);            
         }
+    }
+
+    void createTextureImage()
+    {
+        int texWidth, texHeight, texChannels;
+        auto path = Utility::s_resourcesPath;
+        path.append("texture.jpg");
+        stbi_uc* pixels = stbi_load(path.string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+        vk::DeviceSize imageSize = texWidth * texHeight * 4;
+
+        if (!pixels)
+            throw std::runtime_error("Failed to load image");
+
+        auto stagingBuffer = createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+        memcpy(stagingBuffer.m_BufferAllocInfo.pMappedData, pixels, static_cast<size_t>(imageSize));
+
+        stbi_image_free(pixels);
+
+        using us = vk::ImageUsageFlagBits;
+        m_image = createImage(texWidth, texHeight, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, us::eTransferDst | us::eSampled, VMA_MEMORY_USAGE_GPU_ONLY);
+
+        transitionImageLayout(m_image.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+
+        copyBufferToImage(stagingBuffer.m_Buffer, m_image.m_Image, texWidth, texHeight);
+
+        transitionImageLayout(m_image.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+
+        vmaDestroyBuffer(m_context.getAllocator(), stagingBuffer.m_Buffer, stagingBuffer.m_BufferAllocation);
+    }
+
+    // base/image class
+    void transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout)
+    {
+        auto cmdBuffer = beginSingleTimeCommands(m_commandPool);
+
+        vk::ImageMemoryBarrier barrier;
+        barrier.setOldLayout(oldLayout);
+        barrier.setNewLayout(newLayout);
+        barrier.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+        barrier.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+        barrier.setImage(image);
+        vk::ImageSubresourceRange subresrange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
+        barrier.setSubresourceRange(subresrange);
+
+        vk::PipelineStageFlags sourceStage;
+        vk::PipelineStageFlags destinationStage;
+
+        using il = vk::ImageLayout;
+        using af = vk::AccessFlagBits;
+        using ps = vk::PipelineStageFlagBits;
+        if (oldLayout == il::eUndefined && newLayout == il::eTransferDstOptimal)
+        {
+            barrier.srcAccessMask = static_cast<af>(0);
+            barrier.dstAccessMask = af::eTransferWrite;
+
+            sourceStage = ps::eTopOfPipe;
+            destinationStage = ps::eTransfer;
+        }
+        else if (oldLayout == il::eTransferDstOptimal && newLayout == il::eShaderReadOnlyOptimal)
+        {
+            barrier.srcAccessMask = af::eTransferWrite;
+            barrier.dstAccessMask = af::eShaderRead;
+
+            sourceStage = ps::eTransfer;
+            destinationStage = ps::eFragmentShader;
+        }
+        else
+        {
+            throw std::invalid_argument("unsupported layout transition!");
+        }
+
+        cmdBuffer.pipelineBarrier(sourceStage, destinationStage, static_cast<vk::DependencyFlagBits>(0) , 0, nullptr, 0, nullptr, 1, &barrier);
+
+        endSingleTimeCommands(cmdBuffer, m_context.getGraphicsQueue(), m_commandPool);
+    }
+
+    // base/image class
+    // todo maybe make graphics/transfer queue selectable somehow. needs to assure the resources are conurrently shared
+    void copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height)
+    {
+        auto cmdBuffer = beginSingleTimeCommands(m_commandPool);
+
+        vk::ImageSubresourceLayers subreslayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1);
+        vk::BufferImageCopy region(0, 0, 0, subreslayers, { 0, 0, 0 }, { width, height, 1 });
+
+        cmdBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
+
+        endSingleTimeCommands(cmdBuffer, m_context.getGraphicsQueue(), m_commandPool);
+    }
+
+    // base, maybe cmd buffer abstraction?
+    vk::CommandBuffer beginSingleTimeCommands(vk::CommandPool commandPool) const
+    {
+        vk::CommandBufferAllocateInfo allocInfo(commandPool, vk::CommandBufferLevel::ePrimary, 1);
+        auto cmdBuffer = m_context.getDevice().allocateCommandBuffers(allocInfo).at(0);
+
+        vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+        cmdBuffer.begin(beginInfo);
+
+        return cmdBuffer;
+    }
+
+    // base
+    void endSingleTimeCommands(vk::CommandBuffer commandBuffer, vk::Queue queue, vk::CommandPool commandPool) const
+    {
+        commandBuffer.end();
+
+        vk::SubmitInfo submitInfo({}, nullptr, nullptr, 1, &commandBuffer);
+
+        queue.submit(submitInfo, nullptr);
+        queue.waitIdle();
+
+        m_context.getDevice().freeCommandBuffers(commandPool, commandBuffer);
+    }
+
+    // base
+    ImageInfo createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usageFlags,
+        const VmaMemoryUsage properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0)
+    {
+        ImageInfo returnInfo;
+
+        vk::ImageCreateInfo createInfo({}, vk::ImageType::e2D, format, { width, height, 1 }, 1, 1, vk::SampleCountFlagBits::e1, tiling, usageFlags, sharingMode);
+        if (sharingMode == vk::SharingMode::eConcurrent)
+        {
+            vg::Context::QueueFamilyIndices indices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
+            uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.transferFamily.value() };
+
+            createInfo.queueFamilyIndexCount = 2;
+            createInfo.pQueueFamilyIndices = queueFamilyIndices;
+        }
+
+        returnInfo.m_Image = m_context.getDevice().createImage(createInfo);
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = properties;
+        allocInfo.flags = flags;
+        vmaCreateImage(m_context.getAllocator(),
+            reinterpret_cast<VkImageCreateInfo*>(&createInfo), &allocInfo,
+            reinterpret_cast<VkImage*>(&returnInfo.m_Image), &returnInfo.m_ImageAllocation, &returnInfo.m_ImageAllocInfo);
+
+        return returnInfo;
     }
 
     // todo change this when uniform buffer changes
@@ -1206,6 +1353,8 @@ private:
     vk::DescriptorPool m_descriptorPool;
     std::vector<vk::DescriptorSet> m_descriptorSets;
 
+    ImageInfo m_image;
+
     // todo uniform buffer:
     // 1 big for per-mesh attributes (model matrix, later material, ...), doesnt change
     // push constants for view matrix
@@ -1213,6 +1362,11 @@ private:
     // important patterns:
     //      pack data together that changes together
     //      SoA over AoS
+
+    // todo structure:
+    // re-usable functions and members into baseapp, each app inherits from baseapp
+    // make image/buffer creation/copy/... functions member functions of image/buffer/... classes (maybe)
+
 };
 
 
