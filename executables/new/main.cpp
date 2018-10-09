@@ -583,7 +583,7 @@ namespace vg
             return m_allocator; 
         }
 
-        const int max_frames_in_flight = 3;
+        const int max_frames_in_flight = 2;
 
         void setFrameBufferResized(bool resized) { m_frameBufferResized = resized; }
         bool getFrameBufferResized() const { return m_frameBufferResized; }
@@ -650,12 +650,17 @@ public:
     App()
     {
         createRenderPass();
+        createDescriptorSetLayout();
+
         createGraphicsPipeline();
         createFramebuffers();
         createCommandPools();
 
         createVertexBuffer();
         createIndexBuffer();
+        createUniformBuffers();
+        createDescriptorPool();
+        createDescriptorSets();
 
         createCommandBuffers();
         createSyncObjects();
@@ -663,6 +668,7 @@ public:
 
     ~App()
     {
+        vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indexBufferInfo.m_Buffer), m_indexBufferInfo.m_BufferAllocation);
         vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_vertexBufferInfo.m_Buffer), m_vertexBufferInfo.m_BufferAllocation);
 
         for (int i = 0; i < m_context.max_frames_in_flight; i++)
@@ -679,6 +685,9 @@ public:
         for (const auto framebuffer : m_swapChainFramebuffers)
             m_context.getDevice().destroyFramebuffer(framebuffer);
 
+        m_context.getDevice().destroyDescriptorPool(m_descriptorPool);
+        m_context.getDevice().destroyDescriptorSetLayout(m_descriptorSetLayout);
+
         m_context.getDevice().destroyPipeline(m_graphicsPipeline);
         m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
         m_context.getDevice().destroyRenderPass(m_renderpass);
@@ -692,6 +701,24 @@ public:
         VmaAllocation m_BufferAllocation = nullptr;
         VmaAllocationInfo m_BufferAllocInfo = {};
     };
+
+    struct UniformBufferObject
+    {
+        glm::mat4 model;
+        glm::mat4 view;
+        glm::mat4 proj;
+    };
+
+    void createDescriptorSetLayout()
+    {
+        vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
+
+        vk::DescriptorSetLayoutCreateInfo layoutInfo({}, 1, &uboLayoutBinding);
+
+        m_descriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
+
+    }
+
 
     // base 
     BufferInfo createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0)
@@ -772,6 +799,39 @@ public:
         m_indexBufferInfo = fillBufferTroughStagedTransfer(indices, vk::BufferUsageFlagBits::eIndexBuffer);
     }
 
+    void createUniformBuffers()
+    {
+        for (size_t i = 0; i < m_context.getSwapChainImageViews().size(); i++)
+        {
+            auto buffer = createBuffer(sizeof(UniformBufferObject), vk::BufferUsageFlagBits::eUniformBuffer, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            m_uniformBufferInfos.push_back(buffer);            
+        }
+    }
+
+    // todo change this when uniform buffer changes
+    void createDescriptorPool()
+    {
+        vk::DescriptorPoolSize poolSize(vk::DescriptorType::eUniformBuffer, static_cast<uint32_t>(m_context.getSwapChainImageViews().size()));
+        vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(m_context.getSwapChainImageViews().size()), 1, &poolSize);
+
+        m_descriptorPool = m_context.getDevice().createDescriptorPool(poolInfo);
+    }
+
+    void createDescriptorSets()
+    {
+        std::vector<vk::DescriptorSetLayout> layouts(m_swapChainFramebuffers.size(), m_descriptorSetLayout);
+        vk::DescriptorSetAllocateInfo allocInfo(m_descriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), layouts.data());
+
+        m_descriptorSets = m_context.getDevice().allocateDescriptorSets(allocInfo);
+
+        for (int i = 0; i < m_swapChainFramebuffers.size(); i++)
+        {
+            vk::DescriptorBufferInfo bufferInfo(m_uniformBufferInfos.at(i).m_Buffer, 0, sizeof(UniformBufferObject));
+            vk::WriteDescriptorSet descWrite(m_descriptorSets.at(i), 0, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &bufferInfo, nullptr);
+            m_context.getDevice().updateDescriptorSets(1, &descWrite, 0, nullptr);
+        }
+    }
+
 
     // base
     void recreateSwapChain()
@@ -841,7 +901,7 @@ public:
 
         vk::PipelineViewportStateCreateInfo viewportState({}, 1, &viewport, 1, &scissor);
 
-        vk::PipelineRasterizationStateCreateInfo rasterizer({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eBack, vk::FrontFace::eClockwise, VK_FALSE, 0, 0, 0, 1.0f);
+        vk::PipelineRasterizationStateCreateInfo rasterizer({}, VK_FALSE, VK_FALSE, vk::PolygonMode::eFill, vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise, VK_FALSE, 0, 0, 0, 1.0f);
 
         vk::PipelineMultisampleStateCreateInfo mulitsampling({}, vk::SampleCountFlagBits::e1, VK_FALSE);
 
@@ -869,9 +929,9 @@ public:
         //vk::PipelineDynamicStateCreateInfo dynamicState({}, dynamicStates.size(), dynamicStates.data());
 
         vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
-        pipelineLayoutInfo.setSetLayoutCount(0);
+        pipelineLayoutInfo.setSetLayoutCount(1);
         pipelineLayoutInfo.setPushConstantRangeCount(0);
-
+        pipelineLayoutInfo.setPSetLayouts(&m_descriptorSetLayout);
 
         m_pipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutInfo);
         
@@ -987,6 +1047,8 @@ public:
             m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBufferInfo.m_Buffer, 0ull);
             m_commandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint16);
 
+            m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(i), 0, nullptr);
+
             m_commandBuffers.at(i).drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
             m_commandBuffers.at(i).endRenderPass();
@@ -1039,6 +1101,8 @@ public:
         vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
         vk::Semaphore signalSemaphores[] = { m_renderFinishedSemaphores.at(m_currentFrame) };
 
+        updateUniformBuffer(imageIndex);
+
         vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
 
         m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
@@ -1074,6 +1138,33 @@ public:
         m_currentFrame = (m_currentFrame + 1) % m_context.max_frames_in_flight;
     }
 
+    // TODO this is bs, doesnt need to be triple buffered, can use vkCmdUpdateBuffer
+    // TODO and push constants are better for view matrix I guess
+    void updateUniformBuffer(uint32_t currentImage)
+    {
+        // time needed for rotation
+        // todo use camera instead
+        static auto startTime = std::chrono::high_resolution_clock::now();
+
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+        UniformBufferObject ubo = {};
+        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.proj = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10.0f);
+        
+        // OpenGL space to Vulkan Space
+        ubo.proj[1][1] *= -1;
+
+        void* mappedData;
+        vmaMapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation, &mappedData);
+        memcpy(mappedData, &ubo, sizeof(ubo));
+        vmaUnmapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation);
+
+
+    }
+
     void mainLoop()
     {
         while (!glfwWindowShouldClose(m_context.getWindow()))
@@ -1089,6 +1180,8 @@ private:
     vg::Context m_context;
 
     vk::RenderPass m_renderpass;
+
+    vk::DescriptorSetLayout m_descriptorSetLayout;
 
     vk::PipelineLayout m_pipelineLayout;
     vk::Pipeline m_graphicsPipeline;
@@ -1108,8 +1201,18 @@ private:
 
     BufferInfo m_vertexBufferInfo;
     BufferInfo m_indexBufferInfo;
+    std::vector<BufferInfo> m_uniformBufferInfos;
 
+    vk::DescriptorPool m_descriptorPool;
+    std::vector<vk::DescriptorSet> m_descriptorSets;
 
+    // todo uniform buffer:
+    // 1 big for per-mesh attributes (model matrix, later material, ...), doesnt change
+    // push constants for view matrix
+    // uniform buffer for projection matrix, changes only on window resize
+    // important patterns:
+    //      pack data together that changes together
+    //      SoA over AoS
 };
 
 
