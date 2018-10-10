@@ -13,6 +13,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny/tiny_obj_loader.h"
+
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -659,9 +662,11 @@ public:
         createDepthResources();
         createFramebuffers();
 
-        createTextureImage();
+        createTextureImage("chalet/chalet.jpg");
         createTextureImageView();
         createTextureSampler();
+
+        loadModel("chalet/chalet.obj");
 
         createVertexBuffer();
         createIndexBuffer();
@@ -712,6 +717,51 @@ public:
         m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
         m_context.getDevice().destroyRenderPass(m_renderpass);
         // cleanup here
+    }
+
+    void loadModel(const char* name)
+    {
+        tinyobj::attrib_t attrib;
+        std::vector<tinyobj::shape_t> shapes;
+        std::vector<tinyobj::material_t> materials;
+        std::string err;
+
+        auto path = Utility::s_resourcesPath;
+        path.append(name);
+
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str()))
+        {
+            throw std::runtime_error(err);
+        }
+
+        for (const auto& shape : shapes)
+        {
+            for (const auto& index : shape.mesh.indices)
+            {
+                Vertex vertex = {};
+
+                vertex.pos = {
+                    attrib.vertices[3 * index.vertex_index + 0],
+                    attrib.vertices[3 * index.vertex_index + 1],
+                    attrib.vertices[3 * index.vertex_index + 2]
+                };
+
+                vertex.texCoord = {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    attrib.texcoords[2 * index.texcoord_index + 1]
+                };
+
+                vertex.color = { 1.0f, 1.0f, 1.0f };
+
+                vertex.texCoord = {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                };
+
+                m_vertices.push_back(vertex);
+                m_indices.push_back(m_indices.size());
+            }
+        }
     }
 
     // base
@@ -830,11 +880,11 @@ public:
         }
     }
 
-    void createTextureImage()
+    void createTextureImage(const char* name)
     {
         int texWidth, texHeight, texChannels;
         auto path = Utility::s_resourcesPath;
-        path.append("texture.jpg");
+        path.append(name);
         stbi_uc* pixels = stbi_load(path.string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
         vk::DeviceSize imageSize = texWidth * texHeight * 4;
 
@@ -1286,7 +1336,7 @@ public:
             m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
             m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBufferInfo.m_Buffer, 0ull);
-            m_commandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint16);
+            m_commandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint32);
 
             m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(i), 0, nullptr);
 
@@ -1466,6 +1516,7 @@ private:
     // re-usable functions and members into baseapp, each app inherits from baseapp
     // make image/buffer creation/copy/... functions member functions of image/buffer/... classes (maybe)
 
+    /*
     const std::vector<Vertex> m_vertices = {
         {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
         {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
@@ -1482,7 +1533,10 @@ private:
         0, 1, 2, 2, 3, 0,
         4, 5, 6, 6, 7, 4
     };
+    */
 
+    std::vector<Vertex> m_vertices;
+    std::vector<uint32_t> m_indices;
 };
 
 
