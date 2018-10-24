@@ -1,0 +1,107 @@
+#pragma once
+#include <optional>
+#include <vulkan/vulkan.hpp>
+#include "glm/glm.hpp"
+
+namespace vg
+{
+    const std::vector<const char*> g_validationLayers = { "VK_LAYER_LUNARG_standard_validation" };
+    const std::vector<const char*> g_deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+#ifdef NDEBUG
+    constexpr bool enableValidationLayers = false;
+#else
+    constexpr bool enableValidationLayers = true;
+#endif
+
+    struct QueueFamilyIndices
+    {
+        std::optional<uint32_t> graphicsFamily;
+        std::optional<uint32_t> presentFamily;
+        std::optional<uint32_t> transferFamily;
+        std::optional<uint32_t> computeFamily;
+
+        bool isComplete() const {
+            return graphicsFamily.has_value() && presentFamily.has_value()
+                && transferFamily.has_value() && computeFamily.has_value();
+        }
+    };
+
+    enum class BufferBindings : uint32_t
+    {
+        VertexBuffer = 0
+    };
+
+    struct SwapChainSupportDetails
+    {
+        vk::SurfaceCapabilitiesKHR m_capabilities;
+        std::vector<vk::SurfaceFormatKHR> m_formats;
+        std::vector<vk::PresentModeKHR> m_presentModes;
+    };
+
+    struct VertexPosUv
+    {
+        glm::vec3 pos;
+        glm::vec2 uv;
+
+        static vk::VertexInputBindingDescription getBindingDescription()
+        {
+            vk::VertexInputBindingDescription desc(0, sizeof(VertexPosUv), vk::VertexInputRate::eVertex);
+            return desc;
+        }
+
+        static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions()
+        {
+            std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions;
+            attributeDescriptions.at(0).binding = static_cast<uint32_t>(BufferBindings::VertexBuffer);
+            attributeDescriptions.at(0).location = 0;
+            attributeDescriptions.at(0).format = vk::Format::eR32G32B32Sfloat;
+            attributeDescriptions.at(0).offset = offsetof(VertexPosUv, pos);
+
+            attributeDescriptions.at(1).binding = static_cast<uint32_t>(BufferBindings::VertexBuffer);;
+            attributeDescriptions.at(1).location = 1;
+            attributeDescriptions.at(1).format = vk::Format::eR32G32Sfloat;
+            attributeDescriptions.at(1).offset = offsetof(VertexPosUv, uv);
+
+            return attributeDescriptions;
+        }
+    };
+
+    struct Vertex
+    {
+        glm::vec3 pos;
+        glm::vec3 color;
+        glm::vec2 texCoord;
+
+
+        static vk::VertexInputBindingDescription getBindingDescription()
+        {
+            vk::VertexInputBindingDescription desc(0, sizeof(Vertex), vk::VertexInputRate::eVertex);
+            return desc;
+        }
+
+        static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions()
+        {
+            std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions;
+            attributeDescriptions.at(0).binding = 0;
+            attributeDescriptions.at(0).location = 0;
+            attributeDescriptions.at(0).format = vk::Format::eR32G32B32Sfloat;
+            attributeDescriptions.at(0).offset = offsetof(Vertex, pos);
+
+            attributeDescriptions.at(1).binding = 0;
+            attributeDescriptions.at(1).location = 1;
+            attributeDescriptions.at(1).format = vk::Format::eR32G32B32Sfloat;
+            attributeDescriptions.at(1).offset = offsetof(Vertex, color);
+
+            attributeDescriptions.at(2).binding = 0;
+            attributeDescriptions.at(2).location = 2;
+            attributeDescriptions.at(2).format = vk::Format::eR32G32Sfloat;
+            attributeDescriptions.at(2).offset = offsetof(Vertex, texCoord);
+
+            return attributeDescriptions;
+        }
+    };
+
+}
+
+
