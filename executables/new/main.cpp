@@ -5,6 +5,7 @@
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // use Vulkans depth range [0, 1]
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #define VMA_IMPLEMENTATION
@@ -174,7 +175,7 @@ namespace vg
         {
             for (size_t i = 0; i < m_context.getSwapChainImageViews().size(); i++)
             {
-                auto buffer = createBuffer(sizeof(UniformBufferObject), vk::BufferUsageFlagBits::eUniformBuffer, VMA_MEMORY_USAGE_CPU_TO_GPU);
+                auto buffer = createBuffer(sizeof(UniformBufferObject), vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst, VMA_MEMORY_USAGE_CPU_TO_GPU);
                 m_uniformBufferInfos.push_back(buffer);
             }
         }
@@ -366,9 +367,12 @@ namespace vg
 
             //vk::PipelineDynamicStateCreateInfo dynamicState({}, dynamicStates.size(), dynamicStates.data());
 
+            vk::PushConstantRange vpcr(vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4));
+
             vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
             pipelineLayoutInfo.setSetLayoutCount(1);
-            pipelineLayoutInfo.setPushConstantRangeCount(0);
+            pipelineLayoutInfo.setPushConstantRangeCount(1);
+            pipelineLayoutInfo.setPPushConstantRanges(&vpcr);
             pipelineLayoutInfo.setPSetLayouts(&m_descriptorSetLayout);
 
             m_pipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutInfo);
@@ -485,18 +489,24 @@ namespace vg
             float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
             UniformBufferObject ubo = {};
-            ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            ubo.model = glm::mat4(1.0f);
+            glm::mat4 model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
             ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
             ubo.proj = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10.0f);
 
             // OpenGL space to Vulkan Space
             ubo.proj[1][1] *= -1;
 
-            void* mappedData;
-            vmaMapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation, &mappedData);
-            memcpy(mappedData, &ubo, sizeof(ubo));
-            vmaUnmapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation);
+            //void* mappedData;
+            //vmaMapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation, &mappedData);
+            //memcpy(mappedData, &ubo, sizeof(ubo));
+            //vmaUnmapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation);
 
+            
+            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+            cmdBuf.updateBuffer<UniformBufferObject>(m_uniformBufferInfos.at(currentImage).m_Buffer, 0, ubo);
+            cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(model));
+            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
 
         }
 
