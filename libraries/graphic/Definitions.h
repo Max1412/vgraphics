@@ -1,12 +1,17 @@
 #pragma once
+#include <filesystem>
 #include <optional>
 #include <vulkan/vulkan.hpp>
 #include "glm/glm.hpp"
+#include <fstream>
 
 namespace vg
 {
     const std::vector<const char*> g_validationLayers = { "VK_LAYER_LUNARG_standard_validation" };
     const std::vector<const char*> g_deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+    const auto g_resourcesPath = std::filesystem::current_path().parent_path().parent_path().append("resources");
+    const auto g_shaderPath = std::filesystem::current_path().parent_path().parent_path().append("shaders");
 
 #ifdef NDEBUG
     constexpr bool enableValidationLayers = false;
@@ -99,6 +104,28 @@ namespace vg
             attributeDescriptions.at(2).offset = offsetof(Vertex, texCoord);
 
             return attributeDescriptions;
+        }
+    };
+
+    class Utility
+    {
+    public:
+        static std::vector<char> readFile(const std::filesystem::path& filePath)
+        {
+            std::ifstream file(vg::g_shaderPath / filePath, std::ios::ate | std::ios::binary);
+
+            if (!file.is_open())
+                throw std::runtime_error(std::string("Failed to open file") + filePath.filename().string());
+
+            auto fileSize = static_cast<size_t>(file.tellg());
+            std::vector<char> buffer(fileSize);
+
+            file.seekg(0);
+            file.read(buffer.data(), fileSize);
+
+            file.close();
+
+            return buffer;
         }
     };
 
