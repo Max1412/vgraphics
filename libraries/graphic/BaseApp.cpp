@@ -124,7 +124,7 @@ namespace vg
         vk::Semaphore signalSemaphores[] = { m_renderFinishedSemaphores.at(m_currentFrame) };
 
         // todo maybe make this more generic e.g. "update per-frame information"
-        updateUniformBuffer(imageIndex);
+        updatePerFrameInformation(imageIndex);
 
         vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
 

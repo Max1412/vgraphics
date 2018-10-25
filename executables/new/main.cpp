@@ -23,8 +23,7 @@
 #include "graphic/Context.h"
 #include "graphic/BaseApp.h"
 #include "graphic/Definitions.h"
-
-
+#include "userinput/Pilotview.h"
 
 
 namespace vg
@@ -33,7 +32,7 @@ namespace vg
     class App : public vg::BaseApp
     {
     public:
-        App()
+        App() : m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height)
         {
             createRenderPass();
             createDescriptorSetLayout();
@@ -48,11 +47,12 @@ namespace vg
             createTextureImageView();
             createTextureSampler();
 
-            loadModel("chalet/chalet.obj");
+            loadModel("bunny/bunny.obj");
 
             createVertexBuffer();
             createIndexBuffer();
             createUniformBuffers();
+            createPerFrameInformation();
             createDescriptorPool();
             createDescriptorSets();
 
@@ -179,6 +179,20 @@ namespace vg
                 m_uniformBufferInfos.push_back(buffer);
             }
         }
+
+        void createPerFrameInformation() override
+        {
+            m_camera = Pilotview(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height);
+            m_camera.setSensitivity(0.01f);
+            m_projection = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10.0f);
+            m_projection[1][1] *= -1;
+
+            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+            cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+            cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
+            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+
+        };
 
         void createTextureImage(const char* name)
         {
@@ -367,12 +381,14 @@ namespace vg
 
             //vk::PipelineDynamicStateCreateInfo dynamicState({}, dynamicStates.size(), dynamicStates.data());
 
-            vk::PushConstantRange vpcr(vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4));
+            std::array<vk::PushConstantRange, 1> vpcr = {
+                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, 2 * sizeof(glm::mat4)},
+            };
 
             vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
             pipelineLayoutInfo.setSetLayoutCount(1);
-            pipelineLayoutInfo.setPushConstantRangeCount(1);
-            pipelineLayoutInfo.setPPushConstantRanges(&vpcr);
+            pipelineLayoutInfo.setPushConstantRangeCount(vpcr.size());
+            pipelineLayoutInfo.setPPushConstantRanges(vpcr.data());
             pipelineLayoutInfo.setPSetLayouts(&m_descriptorSetLayout);
 
             m_pipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutInfo);
@@ -479,7 +495,7 @@ namespace vg
 
         // TODO this is bs, doesnt need to be triple buffered, can use vkCmdUpdateBuffer
         // TODO and push constants are better for view matrix I guess
-        void updateUniformBuffer(uint32_t currentImage) override
+        void updatePerFrameInformation(uint32_t currentImage) override
         {
             // time needed for rotation
             // todo use camera instead
@@ -489,23 +505,31 @@ namespace vg
             float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
             UniformBufferObject ubo = {};
-            ubo.model = glm::mat4(1.0f);
-            glm::mat4 model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-            ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-            ubo.proj = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10.0f);
+            ubo.model = glm::mat4(1.0f);// glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            //ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            //ubo.proj = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10.0f);
 
             // OpenGL space to Vulkan Space
-            ubo.proj[1][1] *= -1;
+            //ubo.proj[1][1] *= -1;
 
             //void* mappedData;
             //vmaMapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation, &mappedData);
             //memcpy(mappedData, &ubo, sizeof(ubo));
             //vmaUnmapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation);
 
-            
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+
+            m_camera.update(m_context.getWindow());
+            if(m_camera.hasChanged())
+            {
+                cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+                //cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
+
+                m_camera.resetChangeFlag();
+            }
+
+            // update model matrix
             cmdBuf.updateBuffer<UniformBufferObject>(m_uniformBufferInfos.at(currentImage).m_Buffer, 0, ubo);
-            cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(model));
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
 
         }
@@ -544,6 +568,9 @@ namespace vg
 
         std::vector<vg::Vertex> m_vertices;
         std::vector<uint32_t> m_indices;
+
+        Pilotview m_camera;
+        glm::mat4 m_projection;
 
         // todo uniform buffer:
         // 1 big for per-mesh attributes (model matrix, later material, ...), doesnt change

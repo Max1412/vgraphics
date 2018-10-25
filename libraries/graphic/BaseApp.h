@@ -25,8 +25,8 @@ namespace vg
     struct UniformBufferObject
     {
         glm::mat4 model;
-        glm::mat4 view;
-        glm::mat4 proj;
+        //glm::mat4 view;
+        //glm::mat4 proj;
     };
 
     class BaseApp
@@ -35,11 +35,8 @@ namespace vg
         virtual void recreateSwapChain() = 0;
 
         // todo maybe make this more generic e.g. "update per-frame information"
-        virtual void updateUniformBuffer(uint32_t) = 0;
-
-
-        // todo move this the hell away from here
-        void loadModel(const char* name);
+        virtual void updatePerFrameInformation(uint32_t) = 0;
+        virtual void createPerFrameInformation() = 0;
 
         BufferInfo createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties,
             vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0) const;
