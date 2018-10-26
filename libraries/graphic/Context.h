@@ -1,10 +1,10 @@
 #pragma once
-#include <GLFW/glfw3.h>
-
 #include <vector>
+
 #include <vulkan/vulkan.hpp>
 #include "Definitions.h"
 #include "vma/vk_mem_alloc.h"
+#include <GLFW/glfw3.h>
 
 namespace vg
 {

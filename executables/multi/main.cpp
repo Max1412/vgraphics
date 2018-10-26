@@ -1,7 +1,7 @@
-#include <vulkan/vulkan.hpp>
+#include <iostream>
+#include <filesystem>
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include <vulkan/vulkan.hpp>
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // use Vulkans depth range [0, 1]
 #include <glm/glm.hpp>
@@ -14,18 +14,14 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny/tiny_obj_loader.h"
-
-#include <iostream>
-#include <filesystem>
-
 #include "graphic/Context.h"
 #include "graphic/BaseApp.h"
 #include "graphic/Definitions.h"
 #include "userinput/Pilotview.h"
 #include "geometry/scene.h"
 
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 
 namespace vg
 {
@@ -414,7 +410,7 @@ namespace vg
 
             vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
             pipelineLayoutInfo.setSetLayoutCount(1);
-            pipelineLayoutInfo.setPushConstantRangeCount(vpcr.size());
+            pipelineLayoutInfo.setPushConstantRangeCount(static_cast<uint32_t>(vpcr.size()));
             pipelineLayoutInfo.setPPushConstantRanges(vpcr.data());
             pipelineLayoutInfo.setPSetLayouts(&m_descriptorSetLayout);
 
@@ -512,7 +508,7 @@ namespace vg
                 m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(0), 0, nullptr);
 
                 //m_commandBuffers.at(i).drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
-                m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, m_scene.getDrawCommandData().size(), sizeof(vk::DrawIndexedIndirectCommand));
+                m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()), sizeof(vk::DrawIndexedIndirectCommand));
 
                 m_commandBuffers.at(i).endRenderPass();
 

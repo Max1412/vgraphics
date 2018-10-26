@@ -1,7 +1,7 @@
-#include <vulkan/vulkan.hpp>
+#include <iostream>
+#include <filesystem>
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include <vulkan/vulkan.hpp>
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // use Vulkans depth range [0, 1]
 #include <glm/glm.hpp>
@@ -17,14 +17,13 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny/tiny_obj_loader.h"
 
-#include <iostream>
-#include <filesystem>
-
 #include "graphic/Context.h"
 #include "graphic/BaseApp.h"
 #include "graphic/Definitions.h"
 #include "userinput/Pilotview.h"
 
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 
 namespace vg
 {
@@ -391,7 +390,7 @@ namespace vg
 
             vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
             pipelineLayoutInfo.setSetLayoutCount(1);
-            pipelineLayoutInfo.setPushConstantRangeCount(vpcr.size());
+            pipelineLayoutInfo.setPushConstantRangeCount(static_cast<uint32_t>(vpcr.size()));
             pipelineLayoutInfo.setPPushConstantRanges(vpcr.data());
             pipelineLayoutInfo.setPSetLayouts(&m_descriptorSetLayout);
 

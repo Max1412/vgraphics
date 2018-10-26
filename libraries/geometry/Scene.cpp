@@ -48,18 +48,18 @@ Scene::Scene(const std::filesystem::path& filename)
     // process all meshes in the scene
     for (unsigned i = 0; i < numMeshes; i++)
     {
-        Mesh currentMesh;
+        vk::DrawIndexedIndirectCommand currentMesh;
         currentMesh.instanceCount = 1;
 
         auto numVertices = scene->mMeshes[i]->mNumVertices;
         
         // save how many vertices are already there to get the starting offset
-        currentMesh.vertexOffset = m_allVertices.size();
-        currentMesh.firstIndex = m_allIndices.size();
+        currentMesh.vertexOffset = static_cast<int32_t>(m_allVertices.size());
+        currentMesh.firstIndex = static_cast<uint32_t>(m_allIndices.size());
         //currentMesh.modelMatrixIndex = i;
         
         // put all vertex positions and uvs in one buffer
-        for(int j = 0; j < numVertices; j++)
+        for(unsigned j = 0; j < numVertices; j++)
         {
             vg::VertexPosUv vertex = {};
             vertex.pos = reinterpret_cast<glm::vec3&>(scene->mMeshes[i]->mVertices[j]);
@@ -86,7 +86,7 @@ Scene::Scene(const std::filesystem::path& filename)
             }
         }
 
-        currentMesh.indexCount = m_allIndices.size() - currentMesh.firstIndex;
+        currentMesh.indexCount = static_cast<uint32_t>(m_allIndices.size()) - currentMesh.firstIndex;
 
         m_meshes.push_back(currentMesh);
     }

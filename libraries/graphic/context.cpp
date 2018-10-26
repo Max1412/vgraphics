@@ -1,7 +1,7 @@
-#define GLFW_INCLUDE_VULKAN
-#include "Context.h"
 #include <iostream>
 #include <set>
+#define GLFW_INCLUDE_VULKAN
+#include "Context.h"
 
 namespace help
 {

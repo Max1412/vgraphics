@@ -5,7 +5,6 @@
 #include <vulkan/vulkan.hpp>
 #include "graphic/Definitions.h"
 
-using Mesh = vk::DrawIndexedIndirectCommand;
 
 //struct Mesh
 //{
@@ -20,16 +19,16 @@ using Mesh = vk::DrawIndexedIndirectCommand;
 class Scene
 {
 public:
-    explicit Scene(const std::filesystem::path& scenePath);
+    explicit Scene(const std::filesystem::path& filename);
 
     const std::vector<vg::VertexPosUv>& getVertices() const { return m_allVertices; }
     const std::vector<uint32_t>& getIndices() const { return m_allIndices; }
-    const std::vector<Mesh>& getDrawCommandData() const { return m_meshes; }
+    const std::vector<vk::DrawIndexedIndirectCommand>& getDrawCommandData() const { return m_meshes; }
     const std::vector<glm::mat4>& getModelMatrices() const { return m_modelMatrices; }
 
 private:
     std::vector<uint32_t> m_allIndices;
     std::vector<vg::VertexPosUv> m_allVertices;
-    std::vector<Mesh> m_meshes;
+    std::vector<vk::DrawIndexedIndirectCommand> m_meshes;
     std::vector<glm::mat4> m_modelMatrices;
 };
