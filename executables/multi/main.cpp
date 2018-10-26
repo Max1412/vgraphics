@@ -24,15 +24,16 @@
 #include "graphic/BaseApp.h"
 #include "graphic/Definitions.h"
 #include "userinput/Pilotview.h"
+#include "geometry/scene.h"
 
 
 namespace vg
 {
 
-    class App : public vg::BaseApp
+    class MultiApp : public vg::BaseApp
     {
     public:
-        App() : m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height)
+        MultiApp() : m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height), m_scene("sponza/sponza.obj")
         {
             createRenderPass();
             createDescriptorSetLayout();
@@ -47,11 +48,13 @@ namespace vg
             createTextureImageView();
             createTextureSampler();
 
-            loadModel("bunny/bunny.obj");
+            //loadModel("bunny/bunny.obj");
 
             createVertexBuffer();
             createIndexBuffer();
-            createUniformBuffers();
+            createIndirectDrawBuffer();
+            createPerGeometryBuffers();
+
             createPerFrameInformation();
             createDescriptorPool();
             createDescriptorSets();
@@ -61,10 +64,11 @@ namespace vg
         }
 
         // todo clarify what is here and what is in cleanupswapchain
-        ~App()
+        ~MultiApp()
         {
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indexBufferInfo.m_Buffer), m_indexBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_vertexBufferInfo.m_Buffer), m_vertexBufferInfo.m_BufferAllocation);
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indirectDrawBufferInfo.m_Buffer), m_indirectDrawBufferInfo.m_BufferAllocation);
 
             m_context.getDevice().destroyImageView(m_depthImageView);
             vmaDestroyImage(m_context.getAllocator(), m_depthImage.m_Image, m_depthImage.m_ImageAllocation);
@@ -90,10 +94,11 @@ namespace vg
             m_context.getDevice().destroyDescriptorPool(m_descriptorPool);
             m_context.getDevice().destroyDescriptorSetLayout(m_descriptorSetLayout);
 
-            for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
-            {
-                vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_uniformBufferInfos.at(i).m_Buffer), m_uniformBufferInfos.at(i).m_BufferAllocation);
-            }
+            //for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
+            //{
+            //    vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_uniformBufferInfos.at(i).m_Buffer), m_uniformBufferInfos.at(i).m_BufferAllocation);
+            //}
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_modelMatrixBufferInfo.m_Buffer), m_modelMatrixBufferInfo.m_BufferAllocation);
 
             m_context.getDevice().destroyPipeline(m_graphicsPipeline);
             m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
@@ -101,59 +106,60 @@ namespace vg
             // cleanup here
         }
 
-        void loadModel(const char* name)
-        {
-            //todo vertex deduplication 
-            tinyobj::attrib_t attrib;
-            std::vector<tinyobj::shape_t> shapes;
-            std::vector<tinyobj::material_t> materials;
-            std::string err;
 
-            auto path = vg::g_resourcesPath;
-            path.append(name);
+        //void loadModel(const char* name)
+        //{
+        //    //todo vertex deduplication 
+        //    tinyobj::attrib_t attrib;
+        //    std::vector<tinyobj::shape_t> shapes;
+        //    std::vector<tinyobj::material_t> materials;
+        //    std::string err;
 
-            if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str()))
-            {
-                throw std::runtime_error(err);
-            }
+        //    auto path = vg::g_resourcesPath;
+        //    path.append(name);
 
-            for (const auto& shape : shapes)
-            {
-                for (const auto& index : shape.mesh.indices)
-                {
-                    vg::Vertex vertex = {};
+        //    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str()))
+        //    {
+        //        throw std::runtime_error(err);
+        //    }
 
-                    vertex.pos = {
-                        attrib.vertices[3 * index.vertex_index + 0],
-                        attrib.vertices[3 * index.vertex_index + 1],
-                        attrib.vertices[3 * index.vertex_index + 2]
-                    };
+        //    for (const auto& shape : shapes)
+        //    {
+        //        for (const auto& index : shape.mesh.indices)
+        //        {
+        //            vg::Vertex vertex = {};
 
-                    vertex.texCoord = {
-                        attrib.texcoords[2 * index.texcoord_index + 0],
-                        attrib.texcoords[2 * index.texcoord_index + 1]
-                    };
+        //            vertex.pos = {
+        //                attrib.vertices[3 * index.vertex_index + 0],
+        //                attrib.vertices[3 * index.vertex_index + 1],
+        //                attrib.vertices[3 * index.vertex_index + 2]
+        //            };
 
-                    vertex.color = { 1.0f, 1.0f, 1.0f };
+        //            vertex.texCoord = {
+        //                attrib.texcoords[2 * index.texcoord_index + 0],
+        //                attrib.texcoords[2 * index.texcoord_index + 1]
+        //            };
 
-                    vertex.texCoord = {
-                        attrib.texcoords[2 * index.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-                    };
+        //            vertex.color = { 1.0f, 1.0f, 1.0f };
 
-                    m_vertices.push_back(vertex);
-                    m_indices.push_back(static_cast<uint32_t>(m_indices.size()));
-                }
-            }
-        }
+        //            vertex.texCoord = {
+        //                attrib.texcoords[2 * index.texcoord_index + 0],
+        //                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+        //            };
+
+        //            m_vertices.push_back(vertex);
+        //            m_indices.push_back(static_cast<uint32_t>(m_indices.size()));
+        //        }
+        //    }
+        //}
 
         void createDescriptorSetLayout()
         {
-            vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
+            vk::DescriptorSetLayoutBinding modelMatrixSSBOLayoutBinding(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
 
             vk::DescriptorSetLayoutBinding samplerLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
 
-            std::array<vk::DescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+            std::array<vk::DescriptorSetLayoutBinding, 2> bindings = { modelMatrixSSBOLayoutBinding, samplerLayoutBinding };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
@@ -163,28 +169,29 @@ namespace vg
 
         void createVertexBuffer()
         {
-            m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_vertices, vk::BufferUsageFlagBits::eVertexBuffer);
+            m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getVertices(), vk::BufferUsageFlagBits::eVertexBuffer);
         }
 
         void createIndexBuffer()
         {
-            m_indexBufferInfo = fillBufferTroughStagedTransfer(m_indices, vk::BufferUsageFlagBits::eIndexBuffer);
+            m_indexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getIndices(), vk::BufferUsageFlagBits::eIndexBuffer);
         }
 
-        void createUniformBuffers()
+        void createIndirectDrawBuffer()
         {
-            for (size_t i = 0; i < m_context.getSwapChainImageViews().size(); i++)
-            {
-                auto buffer = createBuffer(sizeof(UniformBufferObject), vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst, VMA_MEMORY_USAGE_CPU_TO_GPU);
-                m_uniformBufferInfos.push_back(buffer);
-            }
+            m_indirectDrawBufferInfo = fillBufferTroughStagedTransfer(m_scene.getDrawCommandData(), vk::BufferUsageFlagBits::eIndirectBuffer);
+        }
+
+        void createPerGeometryBuffers()
+        {
+            m_modelMatrixBufferInfo = fillBufferTroughStagedTransfer(m_scene.getModelMatrices(), vk::BufferUsageFlagBits::eStorageBuffer);
         }
 
         void createPerFrameInformation() override
         {
             m_camera = Pilotview(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height);
             m_camera.setSensitivity(0.01f);
-            m_projection = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10.0f);
+            m_projection = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10000.0f);
             m_projection[1][1] *= -1;
 
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
@@ -249,35 +256,50 @@ namespace vg
         void createDescriptorPool()
         {
             // todo change descriptor count here to have as many of the type specified here as I want
-            vk::DescriptorPoolSize poolSizeUniformBuffer(vk::DescriptorType::eUniformBuffer, static_cast<uint32_t>(m_context.getSwapChainImageViews().size()));
-            vk::DescriptorPoolSize poolSizeCombinedImageSampler(vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_context.getSwapChainImageViews().size()));
+            vk::DescriptorPoolSize poolSizemodelMatrixSSBO(vk::DescriptorType::eStorageBuffer, 1);
+            vk::DescriptorPoolSize poolSizeCombinedImageSampler(vk::DescriptorType::eCombinedImageSampler, 1);
 
-            std::array<vk::DescriptorPoolSize, 2> poolSizes = { poolSizeUniformBuffer, poolSizeCombinedImageSampler };
+            std::array<vk::DescriptorPoolSize, 2> poolSizes = { poolSizemodelMatrixSSBO, poolSizeCombinedImageSampler };
 
-            vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(m_context.getSwapChainImageViews().size()), static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
+            vk::DescriptorPoolCreateInfo poolInfo({}, 1, static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
 
             m_descriptorPool = m_context.getDevice().createDescriptorPool(poolInfo);
         }
 
         void createDescriptorSets()
         {
-            std::vector<vk::DescriptorSetLayout> layouts(m_swapChainFramebuffers.size(), m_descriptorSetLayout);
-            vk::DescriptorSetAllocateInfo allocInfo(m_descriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), layouts.data());
-
+            // only 1 set needed
+            vk::DescriptorSetAllocateInfo allocInfo(m_descriptorPool, 1, &m_descriptorSetLayout);
             m_descriptorSets = m_context.getDevice().allocateDescriptorSets(allocInfo);
 
-            for (int i = 0; i < m_swapChainFramebuffers.size(); i++)
-            {
-                vk::DescriptorBufferInfo bufferInfo(m_uniformBufferInfos.at(i).m_Buffer, 0, sizeof(UniformBufferObject));
-                vk::WriteDescriptorSet descWrite(m_descriptorSets.at(i), 0, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &bufferInfo, nullptr);
+            // model matrix buffer
+            vk::DescriptorBufferInfo bufferInfo(m_modelMatrixBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
+            vk::WriteDescriptorSet descWrite(m_descriptorSets.at(0), 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &bufferInfo, nullptr);
 
-                vk::DescriptorImageInfo imageInfo(m_textureSampler, m_textureImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
-                vk::WriteDescriptorSet descWriteImage(m_descriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &imageInfo, nullptr, nullptr);
+            // 1 texture
+            vk::DescriptorImageInfo imageInfo(m_textureSampler, m_textureImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
+            vk::WriteDescriptorSet descWriteImage(m_descriptorSets.at(0), 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &imageInfo, nullptr, nullptr);
 
-                std::array<vk::WriteDescriptorSet, 2> descriptorWrites = { descWrite, descWriteImage };
+            std::array<vk::WriteDescriptorSet, 2> descriptorWrites = { descWrite, descWriteImage };
+            m_context.getDevice().updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 
-                m_context.getDevice().updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-            }
+            // old stuff with triple buffered uniform buffer (needs 3 desc sets):
+
+            //std::vector<vk::DescriptorSetLayout> layouts(m_swapChainFramebuffers.size(), m_descriptorSetLayout);
+            //vk::DescriptorSetAllocateInfo allocInfo(m_descriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), layouts.data());
+            //m_descriptorSets = m_context.getDevice().allocateDescriptorSets(allocInfo);
+            //for (int i = 0; i < m_swapChainFramebuffers.size(); i++)
+            //{
+            //    vk::DescriptorBufferInfo bufferInfo(m_uniformBufferInfos.at(i).m_Buffer, 0, sizeof(UniformBufferObject));
+            //    vk::WriteDescriptorSet descWrite(m_descriptorSets.at(i), 0, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &bufferInfo, nullptr);
+
+            //    vk::DescriptorImageInfo imageInfo(m_textureSampler, m_textureImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
+            //    vk::WriteDescriptorSet descWriteImage(m_descriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &imageInfo, nullptr, nullptr);
+
+            //    std::array<vk::WriteDescriptorSet, 2> descriptorWrites = { descWrite, descWriteImage };
+
+            //    m_context.getDevice().updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+            //}
         }
 
 
@@ -291,9 +313,10 @@ namespace vg
                 glfwWaitEvents();
             }
 
-            m_projection = glm::perspective(glm::radians(45.0f), width / static_cast<float>(height), 0.1f, 10.0f);
+            m_projection = glm::perspective(glm::radians(45.0f), width / static_cast<float>(height), 0.1f, 10000.0f);
             m_projection[1][1] *= -1;
             m_projectionChanged = true;
+            // todo set camera width, height ?
 
             m_context.getDevice().waitIdle();
 
@@ -332,8 +355,8 @@ namespace vg
 
         void createGraphicsPipeline()
         {
-            const auto vertShaderCode = Utility::readFile("new/shader.vert.spv");
-            const auto fragShaderCode = Utility::readFile("new/shader.frag.spv");
+            const auto vertShaderCode = Utility::readFile("multi/shader.vert.spv");
+            const auto fragShaderCode = Utility::readFile("multi/shader.frag.spv");
 
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
@@ -344,8 +367,8 @@ namespace vg
             const vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
 
-            auto bindingDescription = vg::Vertex::getBindingDescription();
-            auto attributeDescriptions = vg::Vertex::getAttributeDescriptions();
+            auto bindingDescription = vg::VertexPosUv::getBindingDescription();
+            auto attributeDescriptions = vg::VertexPosUv::getAttributeDescriptions();
             vk::PipelineVertexInputStateCreateInfo vertexInputInfo({}, 1, &bindingDescription, static_cast<uint32_t>(attributeDescriptions.size()), attributeDescriptions.data());
 
             vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);
@@ -486,9 +509,10 @@ namespace vg
                 m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBufferInfo.m_Buffer, 0ull);
                 m_commandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint32);
 
-                m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(i), 0, nullptr);
+                m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(0), 0, nullptr);
 
-                m_commandBuffers.at(i).drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
+                //m_commandBuffers.at(i).drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
+                m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, m_scene.getDrawCommandData().size(), sizeof(vk::DrawIndexedIndirectCommand));
 
                 m_commandBuffers.at(i).endRenderPass();
 
@@ -537,7 +561,7 @@ namespace vg
             }
 
             // update model matrix
-            cmdBuf.updateBuffer<UniformBufferObject>(m_uniformBufferInfos.at(currentImage).m_Buffer, 0, ubo);
+            //cmdBuf.updateBuffer<UniformBufferObject>(m_uniformBufferInfos.at(currentImage).m_Buffer, 0, ubo);
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
 
         }
@@ -560,9 +584,12 @@ namespace vg
         vk::Pipeline m_graphicsPipeline;
 
 
-        vg::BufferInfo m_vertexBufferInfo;
+        BufferInfo m_vertexBufferInfo;
         BufferInfo m_indexBufferInfo;
-        std::vector<BufferInfo> m_uniformBufferInfos;
+        BufferInfo m_indirectDrawBufferInfo;
+        BufferInfo m_modelMatrixBufferInfo;
+
+        //std::vector<BufferInfo> m_uniformBufferInfos;
 
         vk::DescriptorPool m_descriptorPool;
         std::vector<vk::DescriptorSet> m_descriptorSets;
@@ -572,12 +599,14 @@ namespace vg
         vk::Sampler m_textureSampler;
         uint32_t m_textureImageMipLevels;
 
-        std::vector<vg::Vertex> m_vertices;
-        std::vector<uint32_t> m_indices;
+        //std::vector<vg::Vertex> m_vertices;
+        //std::vector<uint32_t> m_indices;
 
         Pilotview m_camera;
         glm::mat4 m_projection;
         bool m_projectionChanged;
+
+        Scene m_scene;
 
         // todo uniform buffer:
         // 1 big for per-mesh attributes (model matrix, later material, ...), doesnt change
@@ -596,7 +625,7 @@ namespace vg
 
 int main()
 {
-    vg::App app;
+    vg::MultiApp app;
 
     try
     {

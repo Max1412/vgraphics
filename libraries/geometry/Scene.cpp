@@ -1,4 +1,4 @@
-#include "Scene.h"
+#include "scene.h"
 #include <iostream>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -9,10 +9,10 @@
 Scene::Scene(const std::filesystem::path& filename)
 {
     std::cout << "Loading model from " << filename.string() << std::endl;
-
+    auto path = vg::g_resourcesPath / filename;
     Assimp::Importer importer;
 
-    auto scene = importer.ReadFile(filename.string().c_str(), aiProcess_GenSmoothNormals |
+    auto scene = importer.ReadFile(path.string().c_str(), aiProcess_GenSmoothNormals |
         aiProcess_Triangulate | aiProcess_GenUVCoords | aiProcess_JoinIdenticalVertices //  |
         //aiProcess_RemoveComponent |
         //    aiComponent_ANIMATIONS |
@@ -49,15 +49,17 @@ Scene::Scene(const std::filesystem::path& filename)
     for (unsigned i = 0; i < numMeshes; i++)
     {
         Mesh currentMesh;
-        currentMesh.numVertices = scene->mMeshes[i]->mNumVertices;
+        currentMesh.instanceCount = 1;
+
+        auto numVertices = scene->mMeshes[i]->mNumVertices;
         
         // save how many vertices are already there to get the starting offset
         currentMesh.vertexOffset = m_allVertices.size();
-        currentMesh.indexOffset = m_allIndices.size();
-        currentMesh.modelMatrixIndex = i;
+        currentMesh.firstIndex = m_allIndices.size();
+        //currentMesh.modelMatrixIndex = i;
         
         // put all vertex positions and uvs in one buffer
-        for(int j = 0; j < currentMesh.numVertices; j++)
+        for(int j = 0; j < numVertices; j++)
         {
             vg::VertexPosUv vertex = {};
             vertex.pos = reinterpret_cast<glm::vec3&>(scene->mMeshes[i]->mVertices[j]);
@@ -75,16 +77,16 @@ Scene::Scene(const std::filesystem::path& filename)
         }
 
         // put all indices in one buffer
-        for (unsigned int n = 0; n < scene->mMeshes[n]->mNumFaces; n++)
+        for (unsigned int n = 0; n < scene->mMeshes[i]->mNumFaces; n++)
         {
-            const auto face = scene->mMeshes[n]->mFaces[n];
+            const auto face = scene->mMeshes[i]->mFaces[n];
             for (unsigned int m = 0; m < face.mNumIndices; m++)
             {
                 m_allIndices.push_back(face.mIndices[m]);
             }
         }
 
-        currentMesh.numIndices = m_allIndices.size() - currentMesh.indexOffset;
+        currentMesh.indexCount = m_allIndices.size() - currentMesh.firstIndex;
 
         m_meshes.push_back(currentMesh);
     }

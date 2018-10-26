@@ -306,6 +306,8 @@ namespace vg
 
         vk::PhysicalDeviceFeatures deviceFeatures;
         deviceFeatures.samplerAnisotropy = VK_TRUE;
+        deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
+        deviceFeatures.multiDrawIndirect = VK_TRUE;
 
         vk::DeviceCreateInfo createInfo({},
             static_cast<uint32_t>(queueCreateInfos.size()), queueCreateInfos.data(),
