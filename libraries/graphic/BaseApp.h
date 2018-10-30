@@ -20,6 +20,7 @@ namespace vg
         vk::Image m_Image = nullptr;
         VmaAllocation m_ImageAllocation = nullptr;
         VmaAllocationInfo m_ImageAllocInfo = {};
+        unsigned mipLevels;
     };
 
     struct UniformBufferObject
@@ -60,6 +61,8 @@ namespace vg
             const VmaMemoryUsage properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0) const;
 
         void copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) const;
+
+        ImageInfo createTextureImage(const char* name) const;
 
         void createSyncObjects();
 

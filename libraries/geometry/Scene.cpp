@@ -48,7 +48,7 @@ Scene::Scene(const std::filesystem::path& filename)
     // process all meshes in the scene
     for (unsigned i = 0; i < numMeshes; i++)
     {
-        vk::DrawIndexedIndirectCommand currentMesh;
+        PerMeshInfo currentMesh;
         currentMesh.instanceCount = 1;
 
         auto numVertices = scene->mMeshes[i]->mNumVertices;
@@ -88,6 +88,7 @@ Scene::Scene(const std::filesystem::path& filename)
 
         currentMesh.indexCount = static_cast<uint32_t>(m_allIndices.size()) - currentMesh.firstIndex;
 
+        currentMesh.assimpMaterialIndex = scene->mMeshes[i]->mMaterialIndex;
         m_meshes.push_back(currentMesh);
     }
 
@@ -126,5 +127,54 @@ Scene::Scene(const std::filesystem::path& filename)
 
     traverseChildren(root, startTransform);
 
+
+
+    // import textures
+
+    // maybe throw this out
+    if (!scene->HasMaterials())
+        throw std::runtime_error("No Materials in Scene");
+
+    for(unsigned i = 0; i < scene->mNumMaterials; i++)
+    {
+        const auto mat = scene->mMaterials[i];
+        // todo other types
+        for(aiTextureType type : {aiTextureType_DIFFUSE})
+        {
+            if(mat->GetTextureCount(type) > 0)
+            {
+                aiString reltexPath;
+                const auto ret = mat->GetTexture(type, 0, &reltexPath);
+                if (ret != AI_SUCCESS) throw std::runtime_error("Texture couldn't be loaded by assimp");
+
+                auto [it, notAlreadyThere] = m_texturePathSet.emplace(reltexPath.C_Str());
+                if(notAlreadyThere)
+                {
+                    m_indexedTexturePaths.emplace_back(std::make_pair( std::vector{ i }, reltexPath.C_Str() ));
+                }
+                else // find the texture if it already exists, and append its materialindex
+                {
+                    auto prevTexIt = std::find_if(m_indexedTexturePaths.begin(), m_indexedTexturePaths.end(),
+                        [&reltexPath](const auto& bla) { return std::strcmp(bla.second.c_str(), reltexPath.C_Str()) == 0; });
+                    if (prevTexIt == m_indexedTexturePaths.end()) throw std::runtime_error("Expected to find texture path, but none found.");
+                    prevTexIt->first.push_back(i);
+                }
+            }
+        }
+    }
+
+    int uniqueTexIndex = 0;
+    for(const auto& indexTexPair : m_indexedTexturePaths)
+    {
+        for (unsigned index : indexTexPair.first)
+            for (auto& mesh : m_meshes)
+                if (mesh.assimpMaterialIndex == index)
+                    mesh.texIndex = uniqueTexIndex;
+
+        uniqueTexIndex++;
+    }
+
+    
     importer.FreeScene();
+
 }

@@ -1,6 +1,9 @@
 #include "BaseApp.h"
 #include "tiny/tiny_obj_loader.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
+
 namespace vg
 {
 
@@ -197,6 +200,44 @@ namespace vg
         cmdBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
 
         endSingleTimeCommands(cmdBuffer, m_context.getGraphicsQueue(), m_commandPool);
+    }
+
+    ImageInfo BaseApp::createTextureImage(const char* name) const
+    {
+
+        int texWidth, texHeight, texChannels;
+        auto path = g_resourcesPath;
+        path.append(name);
+        stbi_set_flip_vertically_on_load(true);
+        stbi_uc* pixels = stbi_load(path.string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+        vk::DeviceSize imageSize = texWidth * texHeight * 4;
+        uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
+
+        if (!pixels)
+            throw std::runtime_error("Failed to load image");
+
+        auto stagingBuffer = createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+        memcpy(stagingBuffer.m_BufferAllocInfo.pMappedData, pixels, static_cast<size_t>(imageSize));
+
+        stbi_image_free(pixels);
+
+        using us = vk::ImageUsageFlagBits;
+        ImageInfo returnInfo = createImage(texWidth, texHeight, mipLevels, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
+            us::eTransferSrc | us::eTransferDst | us::eSampled, VMA_MEMORY_USAGE_GPU_ONLY);
+
+        transitionImageLayout(returnInfo.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, mipLevels);
+
+        copyBufferToImage(stagingBuffer.m_Buffer, returnInfo.m_Image, texWidth, texHeight);
+
+        // transition happens while generating mipmaps
+        //transitionImageLayout(m_image.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, m_textureImageMipLevels);
+
+        generateMipmaps(returnInfo.m_Image, texWidth, texHeight, mipLevels);
+
+        vmaDestroyBuffer(m_context.getAllocator(), stagingBuffer.m_Buffer, stagingBuffer.m_BufferAllocation);
+
+        returnInfo.mipLevels = mipLevels;
+        return returnInfo;
     }
 
     void BaseApp::createSyncObjects()

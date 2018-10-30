@@ -11,9 +11,6 @@
 #define VMA_IMPLEMENTATION
 #include "vma/vk_mem_alloc.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
-
 #include "graphic/Context.h"
 #include "graphic/BaseApp.h"
 #include "graphic/Definitions.h"
@@ -26,7 +23,7 @@
 namespace vg
 {
 
-    class MultiApp : public vg::BaseApp
+    class MultiApp : public BaseApp
     {
     public:
         MultiApp() : m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height), m_scene("sponza/sponza.obj")
@@ -40,9 +37,11 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            createTextureImage("chalet/chalet.jpg");
-            createTextureImageView();
-            createTextureSampler();
+            //m_image = createTextureImage("chalet/chalet.jpg");
+            //createTextureImageView(m_image);
+            //createTextureSampler(m_image.mipLevels);
+            createSceneInformation("sponza/");
+
 
             //loadModel("bunny/bunny.obj");
 
@@ -83,9 +82,16 @@ namespace vg
             for (const auto framebuffer : m_swapChainFramebuffers)
                 m_context.getDevice().destroyFramebuffer(framebuffer);
 
-            m_context.getDevice().destroySampler(m_textureSampler);
-            m_context.getDevice().destroyImageView(m_textureImageView);
-            vmaDestroyImage(m_context.getAllocator(), m_image.m_Image, m_image.m_ImageAllocation);
+            //m_context.getDevice().destroySampler(m_textureSampler);
+            //m_context.getDevice().destroyImageView(m_textureImageView);
+            //vmaDestroyImage(m_context.getAllocator(), m_image.m_Image, m_image.m_ImageAllocation);
+
+            for(const auto& sampler : m_allImageSamplers)
+                m_context.getDevice().destroySampler(sampler);
+            for (const auto& view : m_allImageViews)
+                m_context.getDevice().destroyImageView(view);
+            for(const auto& image : m_allImages)
+                vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
 
             m_context.getDevice().destroyDescriptorPool(m_descriptorPool);
             m_context.getDevice().destroyDescriptorSetLayout(m_descriptorSetLayout);
@@ -102,65 +108,26 @@ namespace vg
             // cleanup here
         }
 
-
-        //void loadModel(const char* name)
-        //{
-        //    //todo vertex deduplication 
-        //    tinyobj::attrib_t attrib;
-        //    std::vector<tinyobj::shape_t> shapes;
-        //    std::vector<tinyobj::material_t> materials;
-        //    std::string err;
-
-        //    auto path = vg::g_resourcesPath;
-        //    path.append(name);
-
-        //    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, path.string().c_str()))
-        //    {
-        //        throw std::runtime_error(err);
-        //    }
-
-        //    for (const auto& shape : shapes)
-        //    {
-        //        for (const auto& index : shape.mesh.indices)
-        //        {
-        //            vg::Vertex vertex = {};
-
-        //            vertex.pos = {
-        //                attrib.vertices[3 * index.vertex_index + 0],
-        //                attrib.vertices[3 * index.vertex_index + 1],
-        //                attrib.vertices[3 * index.vertex_index + 2]
-        //            };
-
-        //            vertex.texCoord = {
-        //                attrib.texcoords[2 * index.texcoord_index + 0],
-        //                attrib.texcoords[2 * index.texcoord_index + 1]
-        //            };
-
-        //            vertex.color = { 1.0f, 1.0f, 1.0f };
-
-        //            vertex.texCoord = {
-        //                attrib.texcoords[2 * index.texcoord_index + 0],
-        //                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-        //            };
-
-        //            m_vertices.push_back(vertex);
-        //            m_indices.push_back(static_cast<uint32_t>(m_indices.size()));
-        //        }
-        //    }
-        //}
-
-        void createDescriptorSetLayout()
+        void createSceneInformation(const char * foldername)
         {
-            vk::DescriptorSetLayoutBinding modelMatrixSSBOLayoutBinding(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
+            for(const auto& mesh : m_scene.getIndexedTexturePaths())
+            {
+                // load image, fill resource, create mipmaps
+                const auto imageInfo = createTextureImage(std::string(std::string(foldername) + mesh.second).c_str());
+                m_allImages.push_back(imageInfo);
 
-            vk::DescriptorSetLayoutBinding samplerLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
+                // create view for image
+                vk::ImageViewCreateInfo viewInfo({}, imageInfo.m_Image, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, { vk::ImageAspectFlagBits::eColor, 0, imageInfo.mipLevels, 0, 1 });
+                m_allImageViews.push_back(m_context.getDevice().createImageView(viewInfo));
 
-            std::array<vk::DescriptorSetLayoutBinding, 2> bindings = { modelMatrixSSBOLayoutBinding, samplerLayoutBinding };
+                vk::SamplerCreateInfo samplerInfo({},
+                    vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
+                    vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
+                    0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f, static_cast<float>(imageInfo.mipLevels), vk::BorderColor::eIntOpaqueBlack, VK_FALSE
+                );
+                m_allImageSamplers.push_back(m_context.getDevice().createSampler(samplerInfo));
 
-            vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
-
-            m_descriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
-
+            }
         }
 
         void createVertexBuffer()
@@ -175,7 +142,7 @@ namespace vg
 
         void createIndirectDrawBuffer()
         {
-            m_indirectDrawBufferInfo = fillBufferTroughStagedTransfer(m_scene.getDrawCommandData(), vk::BufferUsageFlagBits::eIndirectBuffer);
+            m_indirectDrawBufferInfo = fillBufferTroughStagedTransfer(m_scene.getDrawCommandData(), vk::BufferUsageFlagBits::eIndirectBuffer | vk::BufferUsageFlagBits::eStorageBuffer);
         }
 
         void createPerGeometryBuffers()
@@ -195,67 +162,35 @@ namespace vg
             cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
 
-        };
-
-        void createTextureImage(const char* name)
-        {
-            int texWidth, texHeight, texChannels;
-            auto path = g_resourcesPath;
-            path.append(name);
-            stbi_uc* pixels = stbi_load(path.string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-            vk::DeviceSize imageSize = texWidth * texHeight * 4;
-            m_textureImageMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-
-            if (!pixels)
-                throw std::runtime_error("Failed to load image");
-
-            auto stagingBuffer = createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT);
-            memcpy(stagingBuffer.m_BufferAllocInfo.pMappedData, pixels, static_cast<size_t>(imageSize));
-
-            stbi_image_free(pixels);
-
-            using us = vk::ImageUsageFlagBits;
-            m_image = createImage(texWidth, texHeight, m_textureImageMipLevels, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
-                us::eTransferSrc | us::eTransferDst | us::eSampled, VMA_MEMORY_USAGE_GPU_ONLY);
-
-            transitionImageLayout(m_image.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, m_textureImageMipLevels);
-
-            copyBufferToImage(stagingBuffer.m_Buffer, m_image.m_Image, texWidth, texHeight);
-
-            // transition happens while generating mipmaps
-            //transitionImageLayout(m_image.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, m_textureImageMipLevels);
-
-            generateMipmaps(m_image.m_Image, texWidth, texHeight, m_textureImageMipLevels);
-
-            vmaDestroyBuffer(m_context.getAllocator(), stagingBuffer.m_Buffer, stagingBuffer.m_BufferAllocation);
         }
 
+        //void createTextureImageView(const ImageInfo& imageInfo)
+        //{
+        //    vk::ImageViewCreateInfo viewInfo({}, imageInfo.m_Image, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, { vk::ImageAspectFlagBits::eColor, 0, imageInfo.mipLevels, 0, 1 });
+        //    m_textureImageView = m_context.getDevice().createImageView(viewInfo);
+        //}
 
-        void createTextureImageView()
-        {
-            vk::ImageViewCreateInfo viewInfo({}, m_image.m_Image, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, { vk::ImageAspectFlagBits::eColor, 0, m_textureImageMipLevels, 0, 1 });
-            m_textureImageView = m_context.getDevice().createImageView(viewInfo);
-        }
+        //void createTextureSampler(uint32_t mipLevels)
+        //{
+        //    vk::SamplerCreateInfo samplerInfo({},
+        //        vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
+        //        vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
+        //        0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f, static_cast<float>(mipLevels), vk::BorderColor::eIntOpaqueBlack, VK_FALSE
+        //    );
 
-        void createTextureSampler()
-        {
-            vk::SamplerCreateInfo samplerInfo({},
-                vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
-                vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
-                0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f, static_cast<float>(m_textureImageMipLevels), vk::BorderColor::eIntOpaqueBlack, VK_FALSE
-            );
-
-            m_textureSampler = m_context.getDevice().createSampler(samplerInfo);
-        }
+        //    m_textureSampler = m_context.getDevice().createSampler(samplerInfo);
+        //}
 
         // todo change this when uniform buffer changes
         void createDescriptorPool()
         {
             // todo change descriptor count here to have as many of the type specified here as I want
+            vk::DescriptorPoolSize perMeshInformationIndirectDrawSSBO(vk::DescriptorType::eStorageBuffer, 1);
             vk::DescriptorPoolSize poolSizemodelMatrixSSBO(vk::DescriptorType::eStorageBuffer, 1);
             vk::DescriptorPoolSize poolSizeCombinedImageSampler(vk::DescriptorType::eCombinedImageSampler, 1);
+            vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, 4096);
 
-            std::array<vk::DescriptorPoolSize, 2> poolSizes = { poolSizemodelMatrixSSBO, poolSizeCombinedImageSampler };
+            std::array<vk::DescriptorPoolSize, 4> poolSizes = { poolSizemodelMatrixSSBO, poolSizeCombinedImageSampler, perMeshInformationIndirectDrawSSBO, poolSizeAllImages };
 
             vk::DescriptorPoolCreateInfo poolInfo({}, 1, static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
 
@@ -272,30 +207,41 @@ namespace vg
             vk::DescriptorBufferInfo bufferInfo(m_modelMatrixBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
             vk::WriteDescriptorSet descWrite(m_descriptorSets.at(0), 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &bufferInfo, nullptr);
 
+            // indirect draw buffer + add. info as ssbo
+            vk::DescriptorBufferInfo perMeshInformationIndirectDrawSSBOInfo(m_indirectDrawBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
+            vk::WriteDescriptorSet descWrite2(m_descriptorSets.at(0), 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &perMeshInformationIndirectDrawSSBOInfo, nullptr);
+
+            std::vector<vk::DescriptorImageInfo> allImageInfos;
+            for(int i = 0; i < m_allImages.size(); i++)
+            {
+                allImageInfos.emplace_back(m_allImageSamplers.at(i), m_allImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
+            }
+            vk::WriteDescriptorSet descWriteAllImages(m_descriptorSets.at(0), 3, 0, m_allImages.size(), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
+
             // 1 texture
-            vk::DescriptorImageInfo imageInfo(m_textureSampler, m_textureImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
-            vk::WriteDescriptorSet descWriteImage(m_descriptorSets.at(0), 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &imageInfo, nullptr, nullptr);
+            //vk::DescriptorImageInfo imageInfo(m_textureSampler, m_textureImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
+            //vk::WriteDescriptorSet descWriteImage(m_descriptorSets.at(0), 2, 0, 1, vk::DescriptorType::eCombinedImageSampler, &imageInfo, nullptr, nullptr);
 
-            std::array<vk::WriteDescriptorSet, 2> descriptorWrites = { descWrite, descWriteImage };
+            //std::array<vk::WriteDescriptorSet, 4> descriptorWrites = { descWrite, descWriteImage, descWrite2, descWriteAllImages };
+            std::array<vk::WriteDescriptorSet, 3> descriptorWrites = { descWrite, descWrite2, descWriteAllImages };
             m_context.getDevice().updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+        }
 
-            // old stuff with triple buffered uniform buffer (needs 3 desc sets):
+        void createDescriptorSetLayout()
+        {
+            vk::DescriptorSetLayoutBinding modelMatrixSSBOLayoutBinding(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
+            vk::DescriptorSetLayoutBinding perMeshInformationIndirectDrawSSBOLB(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
 
-            //std::vector<vk::DescriptorSetLayout> layouts(m_swapChainFramebuffers.size(), m_descriptorSetLayout);
-            //vk::DescriptorSetAllocateInfo allocInfo(m_descriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), layouts.data());
-            //m_descriptorSets = m_context.getDevice().allocateDescriptorSets(allocInfo);
-            //for (int i = 0; i < m_swapChainFramebuffers.size(); i++)
-            //{
-            //    vk::DescriptorBufferInfo bufferInfo(m_uniformBufferInfos.at(i).m_Buffer, 0, sizeof(UniformBufferObject));
-            //    vk::WriteDescriptorSet descWrite(m_descriptorSets.at(i), 0, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &bufferInfo, nullptr);
+            vk::DescriptorSetLayoutBinding samplerLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
 
-            //    vk::DescriptorImageInfo imageInfo(m_textureSampler, m_textureImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
-            //    vk::WriteDescriptorSet descWriteImage(m_descriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &imageInfo, nullptr, nullptr);
+            vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(3, vk::DescriptorType::eCombinedImageSampler, m_scene.getIndexedTexturePaths().size(), vk::ShaderStageFlagBits::eFragment, nullptr);
 
-            //    std::array<vk::WriteDescriptorSet, 2> descriptorWrites = { descWrite, descWriteImage };
 
-            //    m_context.getDevice().updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-            //}
+            std::array<vk::DescriptorSetLayoutBinding, 4> bindings = { modelMatrixSSBOLayoutBinding, samplerLayoutBinding, perMeshInformationIndirectDrawSSBOLB, allTexturesLayoutBinding };
+
+            vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
+
+            m_descriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
         }
 
 
@@ -357,8 +303,13 @@ namespace vg
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
 
+            // specialization constant for the number of textures
+            vk::SpecializationMapEntry mapEntry(0, 0, sizeof(int32_t));
+            int32_t numTextures = static_cast<int32_t>(m_scene.getIndexedTexturePaths().size());
+            vk::SpecializationInfo numTexturesSpecInfo(1, &mapEntry, sizeof(int32_t), &numTextures);
+
             const vk::PipelineShaderStageCreateInfo vertShaderStageInfo({}, vk::ShaderStageFlagBits::eVertex, vertShaderModule, "main");
-            const vk::PipelineShaderStageCreateInfo fragShaderStageInfo({}, vk::ShaderStageFlagBits::eFragment, fragShaderModule, "main");
+            const vk::PipelineShaderStageCreateInfo fragShaderStageInfo({}, vk::ShaderStageFlagBits::eFragment, fragShaderModule, "main", &numTexturesSpecInfo);
 
             const vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
@@ -508,7 +459,8 @@ namespace vg
                 m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(0), 0, nullptr);
 
                 //m_commandBuffers.at(i).drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
-                m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()), sizeof(vk::DrawIndexedIndirectCommand));
+                m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()),
+                    sizeof(std::decay_t<decltype(*m_scene.getDrawCommandData().data())>));
 
                 m_commandBuffers.at(i).endRenderPass();
 
@@ -590,10 +542,15 @@ namespace vg
         vk::DescriptorPool m_descriptorPool;
         std::vector<vk::DescriptorSet> m_descriptorSets;
 
-        ImageInfo m_image;
-        vk::ImageView m_textureImageView;
-        vk::Sampler m_textureSampler;
-        uint32_t m_textureImageMipLevels;
+
+        std::vector<ImageInfo> m_allImages;
+        std::vector<vk::ImageView> m_allImageViews;
+        std::vector<vk::Sampler> m_allImageSamplers;
+
+        //ImageInfo m_image;
+        //vk::ImageView m_textureImageView;
+        //vk::Sampler m_textureSampler;
+        //uint32_t m_textureImageMipLevels;
 
         //std::vector<vg::Vertex> m_vertices;
         //std::vector<uint32_t> m_indices;

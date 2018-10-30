@@ -11,9 +11,6 @@
 #define VMA_IMPLEMENTATION
 #include "vma/vk_mem_alloc.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
-
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny/tiny_obj_loader.h"
 
@@ -42,7 +39,8 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            createTextureImage("chalet/chalet.jpg");
+            m_image = createTextureImage("chalet/chalet.jpg");
+            m_textureImageMipLevels = m_image.mipLevels;
             createTextureImageView();
             createTextureSampler();
 
@@ -191,39 +189,6 @@ namespace vg
             cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
 
-        };
-
-        void createTextureImage(const char* name)
-        {
-            int texWidth, texHeight, texChannels;
-            auto path = g_resourcesPath;
-            path.append(name);
-            stbi_uc* pixels = stbi_load(path.string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-            vk::DeviceSize imageSize = texWidth * texHeight * 4;
-            m_textureImageMipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-
-            if (!pixels)
-                throw std::runtime_error("Failed to load image");
-
-            auto stagingBuffer = createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT);
-            memcpy(stagingBuffer.m_BufferAllocInfo.pMappedData, pixels, static_cast<size_t>(imageSize));
-
-            stbi_image_free(pixels);
-
-            using us = vk::ImageUsageFlagBits;
-            m_image = createImage(texWidth, texHeight, m_textureImageMipLevels, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
-                us::eTransferSrc | us::eTransferDst | us::eSampled, VMA_MEMORY_USAGE_GPU_ONLY);
-
-            transitionImageLayout(m_image.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, m_textureImageMipLevels);
-
-            copyBufferToImage(stagingBuffer.m_Buffer, m_image.m_Image, texWidth, texHeight);
-
-            // transition happens while generating mipmaps
-            //transitionImageLayout(m_image.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, m_textureImageMipLevels);
-
-            generateMipmaps(m_image.m_Image, texWidth, texHeight, m_textureImageMipLevels);
-
-            vmaDestroyBuffer(m_context.getAllocator(), stagingBuffer.m_Buffer, stagingBuffer.m_BufferAllocation);
         }
 
 

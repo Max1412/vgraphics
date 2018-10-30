@@ -102,7 +102,7 @@ namespace vg
             throw std::runtime_error("Validation layers requested, but not available!");
         }
 
-        vk::ApplicationInfo appInfo("Vulkan Test New", 1, "No Engine", 1, VK_API_VERSION_1_0);
+        vk::ApplicationInfo appInfo("Vulkan Test New", 1, "No Engine", 1, VK_API_VERSION_1_1);
 
         // glfw + (cond.) debug layer
         auto requiredExtensions = getRequiredExtensions();
@@ -307,6 +307,7 @@ namespace vg
         vk::PhysicalDeviceFeatures deviceFeatures;
         deviceFeatures.samplerAnisotropy = VK_TRUE;
         deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
+        deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
         deviceFeatures.multiDrawIndirect = VK_TRUE;
 
         vk::DeviceCreateInfo createInfo({},
