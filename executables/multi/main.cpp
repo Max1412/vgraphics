@@ -37,13 +37,7 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            //m_image = createTextureImage("chalet/chalet.jpg");
-            //createTextureImageView(m_image);
-            //createTextureSampler(m_image.mipLevels);
             createSceneInformation("sponza/");
-
-
-            //loadModel("bunny/bunny.obj");
 
             createVertexBuffer();
             createIndexBuffer();
@@ -82,10 +76,6 @@ namespace vg
             for (const auto framebuffer : m_swapChainFramebuffers)
                 m_context.getDevice().destroyFramebuffer(framebuffer);
 
-            //m_context.getDevice().destroySampler(m_textureSampler);
-            //m_context.getDevice().destroyImageView(m_textureImageView);
-            //vmaDestroyImage(m_context.getAllocator(), m_image.m_Image, m_image.m_ImageAllocation);
-
             for(const auto& sampler : m_allImageSamplers)
                 m_context.getDevice().destroySampler(sampler);
             for (const auto& view : m_allImageViews)
@@ -96,10 +86,6 @@ namespace vg
             m_context.getDevice().destroyDescriptorPool(m_descriptorPool);
             m_context.getDevice().destroyDescriptorSetLayout(m_descriptorSetLayout);
 
-            //for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
-            //{
-            //    vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_uniformBufferInfos.at(i).m_Buffer), m_uniformBufferInfos.at(i).m_BufferAllocation);
-            //}
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_modelMatrixBufferInfo.m_Buffer), m_modelMatrixBufferInfo.m_BufferAllocation);
 
             m_context.getDevice().destroyPipeline(m_graphicsPipeline);
@@ -164,23 +150,6 @@ namespace vg
 
         }
 
-        //void createTextureImageView(const ImageInfo& imageInfo)
-        //{
-        //    vk::ImageViewCreateInfo viewInfo({}, imageInfo.m_Image, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, { vk::ImageAspectFlagBits::eColor, 0, imageInfo.mipLevels, 0, 1 });
-        //    m_textureImageView = m_context.getDevice().createImageView(viewInfo);
-        //}
-
-        //void createTextureSampler(uint32_t mipLevels)
-        //{
-        //    vk::SamplerCreateInfo samplerInfo({},
-        //        vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
-        //        vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
-        //        0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f, static_cast<float>(mipLevels), vk::BorderColor::eIntOpaqueBlack, VK_FALSE
-        //    );
-
-        //    m_textureSampler = m_context.getDevice().createSampler(samplerInfo);
-        //}
-
         // todo change this when uniform buffer changes
         void createDescriptorPool()
         {
@@ -218,11 +187,6 @@ namespace vg
             }
             vk::WriteDescriptorSet descWriteAllImages(m_descriptorSets.at(0), 3, 0, m_allImages.size(), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
 
-            // 1 texture
-            //vk::DescriptorImageInfo imageInfo(m_textureSampler, m_textureImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
-            //vk::WriteDescriptorSet descWriteImage(m_descriptorSets.at(0), 2, 0, 1, vk::DescriptorType::eCombinedImageSampler, &imageInfo, nullptr, nullptr);
-
-            //std::array<vk::WriteDescriptorSet, 4> descriptorWrites = { descWrite, descWriteImage, descWrite2, descWriteAllImages };
             std::array<vk::WriteDescriptorSet, 3> descriptorWrites = { descWrite, descWrite2, descWriteAllImages };
             m_context.getDevice().updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
         }
@@ -458,7 +422,6 @@ namespace vg
 
                 m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(0), 0, nullptr);
 
-                //m_commandBuffers.at(i).drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
                 m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()),
                     sizeof(std::decay_t<decltype(*m_scene.getDrawCommandData().data())>));
 
@@ -469,30 +432,8 @@ namespace vg
             }
         }
 
-        // TODO this is bs, doesnt need to be triple buffered, can use vkCmdUpdateBuffer
-        // TODO and push constants are better for view matrix I guess
         void updatePerFrameInformation(uint32_t currentImage) override
         {
-            // time needed for rotation
-            // todo use camera instead
-            static auto startTime = std::chrono::high_resolution_clock::now();
-
-            auto currentTime = std::chrono::high_resolution_clock::now();
-            float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-            UniformBufferObject ubo = {};
-            ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            //ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-            //ubo.proj = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10.0f);
-
-            // OpenGL space to Vulkan Space
-            //ubo.proj[1][1] *= -1;
-
-            //void* mappedData;
-            //vmaMapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation, &mappedData);
-            //memcpy(mappedData, &ubo, sizeof(ubo));
-            //vmaUnmapMemory(m_context.getAllocator(), m_uniformBufferInfos.at(currentImage).m_BufferAllocation);
-
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
 
             m_camera.update(m_context.getWindow());
@@ -508,10 +449,7 @@ namespace vg
                 m_projectionChanged = false;
             }
 
-            // update model matrix
-            //cmdBuf.updateBuffer<UniformBufferObject>(m_uniformBufferInfos.at(currentImage).m_Buffer, 0, ubo);
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
-
         }
 
         void mainLoop()
@@ -537,8 +475,6 @@ namespace vg
         BufferInfo m_indirectDrawBufferInfo;
         BufferInfo m_modelMatrixBufferInfo;
 
-        //std::vector<BufferInfo> m_uniformBufferInfos;
-
         vk::DescriptorPool m_descriptorPool;
         std::vector<vk::DescriptorSet> m_descriptorSets;
 
@@ -547,32 +483,11 @@ namespace vg
         std::vector<vk::ImageView> m_allImageViews;
         std::vector<vk::Sampler> m_allImageSamplers;
 
-        //ImageInfo m_image;
-        //vk::ImageView m_textureImageView;
-        //vk::Sampler m_textureSampler;
-        //uint32_t m_textureImageMipLevels;
-
-        //std::vector<vg::Vertex> m_vertices;
-        //std::vector<uint32_t> m_indices;
-
         Pilotview m_camera;
         glm::mat4 m_projection;
         bool m_projectionChanged;
 
         Scene m_scene;
-
-        // todo uniform buffer:
-        // 1 big for per-mesh attributes (model matrix, later material, ...), doesnt change
-        // push constants for view matrix
-        // uniform buffer for projection matrix, changes only on window resize
-        // important patterns:
-        //      pack data together that changes together
-        //      SoA over AoS
-
-        // todo structure:
-        // re-usable functions and members into baseapp, each app inherits from baseapp
-        // make image/buffer creation/copy/... functions member functions of image/buffer/... classes (maybe)
-
     };
 }
 
