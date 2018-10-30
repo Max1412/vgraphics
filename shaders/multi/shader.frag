@@ -4,6 +4,7 @@
 
 layout(location = 0) in vec2 fragTexCoord;
 layout(location = 1) flat in int drawID;
+layout(location = 2) in vec3 passNormal;
 
 layout(location = 0) out vec4 outColor;
 
@@ -34,4 +35,5 @@ layout(set = 0, binding = 3) uniform sampler2D allTextures[NUM_TEXTURES];
 void main()
 {
     outColor = texture(allTextures[perMeshInfos.perMesh[drawID].texIndex], fragTexCoord);
+    outColor += vec4(passNormal, 1.0);
 }

@@ -61,8 +61,9 @@ Scene::Scene(const std::filesystem::path& filename)
         // put all vertex positions and uvs in one buffer
         for(unsigned j = 0; j < numVertices; j++)
         {
-            vg::VertexPosUv vertex = {};
+            vg::VertexPosUvNormal vertex = {};
             vertex.pos = reinterpret_cast<glm::vec3&>(scene->mMeshes[i]->mVertices[j]);
+            vertex.normal = reinterpret_cast<glm::vec3&>(scene->mMeshes[i]->mNormals[j]);
 
             if (scene->mMeshes[i]->HasTextureCoords(0))
             {

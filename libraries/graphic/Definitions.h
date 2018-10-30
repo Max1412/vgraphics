@@ -44,6 +44,40 @@ namespace vg
         std::vector<vk::PresentModeKHR> m_presentModes;
     };
 
+    struct VertexPosUvNormal
+    {
+        glm::vec3 pos;
+        glm::vec2 uv;
+        glm::vec3 normal;
+
+        static vk::VertexInputBindingDescription getBindingDescription()
+        {
+            vk::VertexInputBindingDescription desc(0, sizeof(VertexPosUvNormal), vk::VertexInputRate::eVertex);
+            return desc;
+        }
+
+        static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions()
+        {
+            std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions;
+            attributeDescriptions.at(0).binding = static_cast<uint32_t>(BufferBindings::VertexBuffer);
+            attributeDescriptions.at(0).location = 0;
+            attributeDescriptions.at(0).format = vk::Format::eR32G32B32Sfloat;
+            attributeDescriptions.at(0).offset = offsetof(VertexPosUvNormal, pos);
+
+            attributeDescriptions.at(1).binding = static_cast<uint32_t>(BufferBindings::VertexBuffer);;
+            attributeDescriptions.at(1).location = 1;
+            attributeDescriptions.at(1).format = vk::Format::eR32G32Sfloat;
+            attributeDescriptions.at(1).offset = offsetof(VertexPosUvNormal, uv);
+
+            attributeDescriptions.at(2).binding = static_cast<uint32_t>(BufferBindings::VertexBuffer);;
+            attributeDescriptions.at(2).location = 2;
+            attributeDescriptions.at(2).format = vk::Format::eR32G32B32Sfloat;
+            attributeDescriptions.at(2).offset = offsetof(VertexPosUvNormal, normal);
+
+            return attributeDescriptions;
+        }
+    };
+
     struct VertexPosUv
     {
         glm::vec3 pos;

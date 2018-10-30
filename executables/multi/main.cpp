@@ -278,8 +278,8 @@ namespace vg
             const vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
 
-            auto bindingDescription = vg::VertexPosUv::getBindingDescription();
-            auto attributeDescriptions = vg::VertexPosUv::getAttributeDescriptions();
+            auto bindingDescription = vg::VertexPosUvNormal::getBindingDescription();
+            auto attributeDescriptions = vg::VertexPosUvNormal::getAttributeDescriptions();
             vk::PipelineVertexInputStateCreateInfo vertexInputInfo({}, 1, &bindingDescription, static_cast<uint32_t>(attributeDescriptions.size()), attributeDescriptions.data());
 
             vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);

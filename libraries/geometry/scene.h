@@ -30,7 +30,7 @@ class Scene
 public:
     explicit Scene(const std::filesystem::path& filename);
 
-    const std::vector<vg::VertexPosUv>& getVertices() const { return m_allVertices; }
+    const std::vector<vg::VertexPosUvNormal>& getVertices() const { return m_allVertices; }
     const std::vector<uint32_t>& getIndices() const { return m_allIndices; }
     const std::vector<PerMeshInfo>& getDrawCommandData() const { return m_meshes; }
     const std::vector<glm::mat4>& getModelMatrices() const { return m_modelMatrices; }
@@ -38,7 +38,7 @@ public:
 
 private:
     std::vector<uint32_t> m_allIndices;
-    std::vector<vg::VertexPosUv> m_allVertices;
+    std::vector<vg::VertexPosUvNormal> m_allVertices;
     std::vector<PerMeshInfo> m_meshes;
     std::vector<glm::mat4> m_modelMatrices;
     std::set<std::string> m_texturePathSet;
