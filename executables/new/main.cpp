@@ -69,7 +69,8 @@ namespace vg
             for (int i = 0; i < m_context.max_frames_in_flight; i++)
             {
                 m_context.getDevice().destroySemaphore(m_imageAvailableSemaphores.at(i));
-                m_context.getDevice().destroySemaphore(m_renderFinishedSemaphores.at(i));
+                m_context.getDevice().destroySemaphore(m_graphicsRenderFinishedSemaphores.at(i));
+                m_context.getDevice().destroySemaphore(m_guiFinishedSemaphores.at(i));
                 m_context.getDevice().destroyFence(m_inFlightFences.at(i));
             }
 

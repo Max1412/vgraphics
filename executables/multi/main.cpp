@@ -20,6 +20,9 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include "imgui/imgui_impl_vulkan.h"
+#include "imgui/imgui_impl_glfw.h"
+
 namespace vg
 {
 
@@ -50,6 +53,8 @@ namespace vg
 
             createCommandBuffers();
             createSyncObjects();
+
+            setupImgui();
         }
 
         // todo clarify what is here and what is in cleanupswapchain
@@ -65,7 +70,8 @@ namespace vg
             for (int i = 0; i < m_context.max_frames_in_flight; i++)
             {
                 m_context.getDevice().destroySemaphore(m_imageAvailableSemaphores.at(i));
-                m_context.getDevice().destroySemaphore(m_renderFinishedSemaphores.at(i));
+                m_context.getDevice().destroySemaphore(m_graphicsRenderFinishedSemaphores.at(i));
+                m_context.getDevice().destroySemaphore(m_guiFinishedSemaphores.at(i));
                 m_context.getDevice().destroyFence(m_inFlightFences.at(i));
             }
 
@@ -360,7 +366,7 @@ namespace vg
                 vk::SampleCountFlagBits::e1,
                 vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,            // load store op
                 vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
-                vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR
+                vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal
             );
 
             vk::AttachmentReference colorAttachmentRef(0, vk::ImageLayout::eColorAttachmentOptimal);
@@ -452,11 +458,59 @@ namespace vg
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
         }
 
+        void configureImgui()
+        {
+            ImGui_ImplVulkan_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+            ImGui::ShowDemoWindow();
+            ImGui::Render();
+
+            if(m_imguiCommandBuffers.empty())
+            {
+                vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
+                m_imguiCommandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
+                //TODO maybe move this
+                //TODO cleanup
+            }
+
+
+            for(int i = 0; i < m_imguiCommandBuffers.size(); i++)
+            {
+                vk::RenderPassBeginInfo imguiRenderpassInfo(m_context.getImguiRenderpass(), m_swapChainFramebuffers.at(i), { {0, 0}, m_context.getSwapChainExtent() }, 0, nullptr);
+
+                vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+
+                // record cmd buffer
+                m_imguiCommandBuffers.at(i).begin(beginInfo);
+                m_imguiCommandBuffers.at(i).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
+                ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(i));
+                m_imguiCommandBuffers.at(i).endRenderPass();
+                m_imguiCommandBuffers.at(i).end();
+            }
+
+        }
+
+        void buildImguiCmdBufferAndSubmit(uint32_t imageIndex) override
+        {
+            // wait rest of the rendering, submit
+            vk::Semaphore waitSemaphores[] = { m_graphicsRenderFinishedSemaphores.at(m_currentFrame) };
+            vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+            vk::Semaphore signalSemaphores[] = { m_guiFinishedSemaphores.at(m_currentFrame) };
+
+            vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_imguiCommandBuffers.at(imageIndex), 1, signalSemaphores);
+
+            m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
+            m_context.getGraphicsQueue().submit(submitInfo, m_inFlightFences.at(m_currentFrame));
+
+        }
+
         void mainLoop()
         {
             while (!glfwWindowShouldClose(m_context.getWindow()))
             {
                 glfwPollEvents();
+                configureImgui();
                 drawFrame();
             }
 

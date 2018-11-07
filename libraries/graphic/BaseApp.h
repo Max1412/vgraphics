@@ -39,6 +39,8 @@ namespace vg
         virtual void updatePerFrameInformation(uint32_t) = 0;
         virtual void createPerFrameInformation() = 0;
 
+        virtual void buildImguiCmdBufferAndSubmit(uint32_t imageIndex) {};
+
         BufferInfo createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties,
             vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0) const;
 
@@ -72,6 +74,8 @@ namespace vg
 
         void generateMipmaps(vk::Image image, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) const;
 
+        void setupImgui();
+
 
 
     protected:
@@ -81,11 +85,14 @@ namespace vg
         vk::RenderPass m_renderpass;
 
         std::vector<vk::Semaphore> m_imageAvailableSemaphores;
-        std::vector<vk::Semaphore> m_renderFinishedSemaphores;
+        std::vector<vk::Semaphore> m_graphicsRenderFinishedSemaphores;
+        std::vector<vk::Semaphore> m_guiFinishedSemaphores;
+
         std::vector<vk::Fence> m_inFlightFences;
         int m_currentFrame = 0;
 
         std::vector<vk::CommandBuffer> m_commandBuffers;
+        std::vector<vk::CommandBuffer> m_imguiCommandBuffers;
 
 
         std::vector<vk::Framebuffer> m_swapChainFramebuffers;

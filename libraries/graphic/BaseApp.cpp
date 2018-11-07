@@ -3,6 +3,8 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
+#include "imgui/imgui_impl_vulkan.h"
+#include "imgui/imgui.h"
 
 namespace vg
 {
@@ -124,19 +126,20 @@ namespace vg
 
         vk::Semaphore waitSemaphores[] = { m_imageAvailableSemaphores.at(m_currentFrame) };
         vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
-        vk::Semaphore signalSemaphores[] = { m_renderFinishedSemaphores.at(m_currentFrame) };
+        vk::Semaphore signalSemaphores[] = { m_graphicsRenderFinishedSemaphores.at(m_currentFrame) };
 
         // todo maybe make this more generic e.g. "update per-frame information"
         updatePerFrameInformation(imageIndex);
 
         vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
 
-        m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
-        m_context.getGraphicsQueue().submit(submitInfo, m_inFlightFences.at(m_currentFrame));
+        m_context.getGraphicsQueue().submit(submitInfo, nullptr); // what to do with this fence?
+
+        buildImguiCmdBufferAndSubmit(imageIndex);
 
         std::array<vk::SwapchainKHR, 1> swapChains = { m_context.getSwapChain() };
 
-        vk::PresentInfoKHR presentInfo(1, signalSemaphores, static_cast<uint32_t>(swapChains.size()), swapChains.data(), &imageIndex, nullptr);
+        vk::PresentInfoKHR presentInfo(1, &m_guiFinishedSemaphores.at(m_currentFrame), static_cast<uint32_t>(swapChains.size()), swapChains.data(), &imageIndex, nullptr);
 
         vk::Result presentResult = vk::Result::eSuccess;
 
@@ -160,7 +163,6 @@ namespace vg
         //    throw std::runtime_error("Failed to present");
 
         m_context.getPresentQueue().waitIdle();
-
         m_currentFrame = (m_currentFrame + 1) % m_context.max_frames_in_flight;
     }
 
@@ -243,7 +245,8 @@ namespace vg
     void BaseApp::createSyncObjects()
     {
         m_imageAvailableSemaphores.resize(m_context.max_frames_in_flight);
-        m_renderFinishedSemaphores.resize(m_context.max_frames_in_flight);
+        m_graphicsRenderFinishedSemaphores.resize(m_context.max_frames_in_flight);
+        m_guiFinishedSemaphores.resize(m_context.max_frames_in_flight);
         m_inFlightFences.resize(m_context.max_frames_in_flight);
 
         vk::SemaphoreCreateInfo semaInfo;
@@ -252,7 +255,8 @@ namespace vg
         for (int i = 0; i < m_context.max_frames_in_flight; i++)
         {
             m_imageAvailableSemaphores.at(i) = m_context.getDevice().createSemaphore(semaInfo);
-            m_renderFinishedSemaphores.at(i) = m_context.getDevice().createSemaphore(semaInfo);
+            m_graphicsRenderFinishedSemaphores.at(i) = m_context.getDevice().createSemaphore(semaInfo);
+            m_guiFinishedSemaphores.at(i) = m_context.getDevice().createSemaphore(semaInfo);
             m_inFlightFences.at(i) = m_context.getDevice().createFence(fenceInfo);
         }
 
@@ -394,6 +398,13 @@ namespace vg
             1, &barrier
         );
 
+        endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+    }
+
+    void BaseApp::setupImgui()
+    {
+        auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+        ImGui_ImplVulkan_CreateFontsTexture(static_cast<VkCommandBuffer>(cmdBuf));
         endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
     }
 }

@@ -64,6 +64,10 @@ namespace vg
 
         vk::ShaderModule createShaderModule(const std::vector<char>& code) const;
 
+        void initImgui();
+
+        void cleanupImgui();
+
         GLFWwindow* getWindow() const { return m_window; }
 
         vk::Device getDevice() const { return m_device; }
@@ -88,6 +92,8 @@ namespace vg
 
         void setFrameBufferResized(const bool resized) { m_frameBufferResized = resized; }
         bool getFrameBufferResized() const { return m_frameBufferResized; }
+
+        vk::RenderPass getImguiRenderpass() const { return m_imguiRenderpass; }
 
     private:
         // vk initialisation objects
@@ -115,6 +121,10 @@ namespace vg
         int m_width = 1600;
         int m_height = 900;
         bool m_frameBufferResized = false;
+
+        // imgui objects
+        vk::DescriptorPool m_imguiDescriptorPool;
+        vk::RenderPass m_imguiRenderpass;
     };
 }
 

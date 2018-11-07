@@ -2,6 +2,8 @@
 #include <set>
 #define GLFW_INCLUDE_VULKAN
 #include "Context.h"
+#include "imgui/imgui_impl_vulkan.h"
+#include "imgui/imgui_impl_glfw.h"
 
 namespace help
 {
@@ -29,10 +31,14 @@ namespace vg
     {
         initWindow();
         initVulkan();
+        initImgui();
     }
 
     Context::~Context()
     {
+        cleanupImgui();
+
+
         vmaDestroyAllocator(m_allocator);
 
         for (const auto& imageView : m_swapChainImageViews)
@@ -449,4 +455,70 @@ namespace vg
         vk::ShaderModuleCreateInfo createInfo({}, code.size(), reinterpret_cast<const uint32_t*>(code.data()));
         return m_device.createShaderModule(createInfo);
     }
+
+    void Context::initImgui()
+    {
+        ImGui::CreateContext();
+        ImGui_ImplGlfw_InitForVulkan(m_window, true);
+
+        // create imgui descriptor pool
+        vk::DescriptorPoolSize poolSizeCombinedImageSampler(vk::DescriptorType::eCombinedImageSampler, 1);
+        std::array<vk::DescriptorPoolSize, 1> poolSizes = { poolSizeCombinedImageSampler };
+        vk::DescriptorPoolCreateInfo poolInfo({}, 1, static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
+        m_imguiDescriptorPool = m_device.createDescriptorPool(poolInfo);
+
+        // create imgui renderpass
+        vk::AttachmentDescription colorAttachment({}, m_swapChainImageFormat,
+            vk::SampleCountFlagBits::e1,
+            vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore,            // load store op
+            vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
+            vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR
+        );
+        vk::AttachmentReference colorAttachmentRef(0, vk::ImageLayout::eColorAttachmentOptimal);
+
+        vk::AttachmentDescription depthAttachment({}, vk::Format::eD32SfloatS8Uint,
+            vk::SampleCountFlagBits::e1,
+            vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eDontCare,
+            vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+            vk::ImageLayout::eDepthStencilAttachmentOptimal, vk::ImageLayout::eDepthStencilAttachmentOptimal
+        );
+        vk::AttachmentReference depthAttachmentRef(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+
+        vk::SubpassDependency dependency(VK_SUBPASS_EXTERNAL, 0,
+            vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
+            {}, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::DependencyFlagBits::eByRegion);
+
+
+        vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics,
+            0, nullptr,                 // input attachments (standard values)
+            1, &colorAttachmentRef,     // color attachments: layout (location = 0) out -> colorAttachmentRef is at index 0
+            nullptr,                    // no resolve attachment
+            &depthAttachmentRef);       // depth stencil attachment
+                                        // other attachment at standard values: Preserved
+
+        std::array<vk::AttachmentDescription, 2> attachments = { colorAttachment, depthAttachment };
+        vk::RenderPassCreateInfo renderpassInfo({}, static_cast<uint32_t>(attachments.size()), attachments.data(), 1, &subpass, 1, &dependency);
+        m_imguiRenderpass = m_device.createRenderPass(renderpassInfo);
+
+        // init imgui
+        ImGui_ImplVulkan_InitInfo initInfo = {};
+        initInfo.Instance = static_cast<VkInstance>(m_instance);
+        initInfo.PhysicalDevice = static_cast<VkPhysicalDevice>(m_phsyicalDevice);
+        initInfo.Device = static_cast<VkDevice>(m_device);
+        initInfo.QueueFamily = findQueueFamilies(m_phsyicalDevice).graphicsFamily.value();
+        initInfo.Queue = m_graphicsQueue;
+        initInfo.PipelineCache = nullptr;
+        initInfo.DescriptorPool = m_imguiDescriptorPool;
+        ImGui_ImplVulkan_Init(&initInfo, static_cast<VkRenderPass>(m_imguiRenderpass));
+    }
+
+    void Context::cleanupImgui()
+    {
+        ImGui_ImplVulkan_InvalidateFontUploadObjects();
+        ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        m_device.destroyDescriptorPool(m_imguiDescriptorPool);
+        m_device.destroyRenderPass(m_imguiRenderpass);
+    }
+
 }
