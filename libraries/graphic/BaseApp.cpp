@@ -93,7 +93,7 @@ namespace vg
         auto queueFamilyIndices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
 
         // pool for graphics
-        vk::CommandPoolCreateInfo graphicsPoolInfo({}, queueFamilyIndices.graphicsFamily.value());
+        vk::CommandPoolCreateInfo graphicsPoolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, queueFamilyIndices.graphicsFamily.value());
         m_commandPool = m_context.getDevice().createCommandPool(graphicsPoolInfo);
 
         // pool for transfer

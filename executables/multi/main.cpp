@@ -471,28 +471,25 @@ namespace vg
                 vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
                 m_imguiCommandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
                 //TODO maybe move this
-                //TODO cleanup
-            }
-
-
-            for(int i = 0; i < m_imguiCommandBuffers.size(); i++)
-            {
-                vk::RenderPassBeginInfo imguiRenderpassInfo(m_context.getImguiRenderpass(), m_swapChainFramebuffers.at(i), { {0, 0}, m_context.getSwapChainExtent() }, 0, nullptr);
-
-                vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
-
-                // record cmd buffer
-                m_imguiCommandBuffers.at(i).begin(beginInfo);
-                m_imguiCommandBuffers.at(i).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
-                ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(i));
-                m_imguiCommandBuffers.at(i).endRenderPass();
-                m_imguiCommandBuffers.at(i).end();
             }
 
         }
 
         void buildImguiCmdBufferAndSubmit(uint32_t imageIndex) override
         {
+            int i = imageIndex;
+            vk::RenderPassBeginInfo imguiRenderpassInfo(m_context.getImguiRenderpass(), m_swapChainFramebuffers.at(i), { {0, 0}, m_context.getSwapChainExtent() }, 0, nullptr);
+
+            vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+
+            // record cmd buffer
+            m_imguiCommandBuffers.at(i).reset({});
+            m_imguiCommandBuffers.at(i).begin(beginInfo);
+            m_imguiCommandBuffers.at(i).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
+            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(i));
+            m_imguiCommandBuffers.at(i).endRenderPass();
+            m_imguiCommandBuffers.at(i).end();
+
             // wait rest of the rendering, submit
             vk::Semaphore waitSemaphores[] = { m_graphicsRenderFinishedSemaphores.at(m_currentFrame) };
             vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
