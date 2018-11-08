@@ -39,7 +39,15 @@ namespace vg
         virtual void updatePerFrameInformation(uint32_t) = 0;
         virtual void createPerFrameInformation() = 0;
 
-        virtual void buildImguiCmdBufferAndSubmit(uint32_t imageIndex) {};
+        virtual void buildImguiCmdBufferAndSubmit(const uint32_t imageIndex)
+        {
+            // submit to queue without any commands to signal the semaphore and fence to end the frame
+            vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+            vk::SubmitInfo submitInfo(1, &m_graphicsRenderFinishedSemaphores.at(m_currentFrame), waitStages, 0, nullptr, 1, &m_guiFinishedSemaphores.at(m_currentFrame));
+
+            m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
+            m_context.getGraphicsQueue().submit(1, &submitInfo, m_inFlightFences.at(m_currentFrame));
+        };
 
         BufferInfo createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties,
             vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0) const;
@@ -51,7 +59,7 @@ namespace vg
 
         vk::CommandBuffer beginSingleTimeCommands(vk::CommandPool commandPool) const;
 
-        void endSingleTimeCommands(vk::CommandBuffer commandBuffer, vk::Queue queue, vk::CommandPool commandPool) const;
+        void endSingleTimeCommands(vk::CommandBuffer commandBuffer, vk::Queue queue, vk::CommandPool commandPool, const SemaphoreInfos& si = {}) const;
 
         void createFramebuffers();
 
@@ -70,7 +78,7 @@ namespace vg
 
         void createDepthResources();
 
-        void transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels = 1) const;
+        void transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels = 1, const SemaphoreInfos& si = {}) const;
 
         void generateMipmaps(vk::Image image, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) const;
 

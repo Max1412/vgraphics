@@ -59,11 +59,11 @@ namespace vg
         return cmdBuffer;
     }
 
-    void BaseApp::endSingleTimeCommands(vk::CommandBuffer commandBuffer, vk::Queue queue, vk::CommandPool commandPool) const
+    void BaseApp::endSingleTimeCommands(vk::CommandBuffer commandBuffer, vk::Queue queue, vk::CommandPool commandPool, const SemaphoreInfos& si) const
     {
         commandBuffer.end();
 
-        vk::SubmitInfo submitInfo({}, nullptr, nullptr, 1, &commandBuffer);
+        vk::SubmitInfo submitInfo(si.waitSemaphoreCount, si.waitSemaphores, &si.waitStageFlags, 1, &commandBuffer, si.signalSemaphoreCount, si.signalSemaphores);
 
         queue.submit(submitInfo, nullptr);
         queue.waitIdle();
@@ -275,7 +275,8 @@ namespace vg
         transitionImageLayout(m_depthImage.m_Image, depthFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
     }
 
-    void BaseApp::transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels) const
+    void BaseApp::transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels,
+        const SemaphoreInfos& si) const
     {
         auto cmdBuffer = beginSingleTimeCommands(m_commandPool);
 
@@ -329,6 +330,14 @@ namespace vg
             sourceStage = ps::eTopOfPipe;
             destinationStage = ps::eEarlyFragmentTests;
         }
+        else if (oldLayout == il::eColorAttachmentOptimal && newLayout == il::ePresentSrcKHR)
+        {
+            barrier.srcAccessMask = af::eColorAttachmentWrite;
+            barrier.dstAccessMask = af::eColorAttachmentWrite;
+
+            sourceStage = ps::eColorAttachmentOutput;
+            destinationStage = ps::eAllCommands;
+        }
         else
         {
             throw std::invalid_argument("unsupported layout transition!");
@@ -336,7 +345,7 @@ namespace vg
 
         cmdBuffer.pipelineBarrier(sourceStage, destinationStage, static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr, 1, &barrier);
 
-        endSingleTimeCommands(cmdBuffer, m_context.getGraphicsQueue(), m_commandPool);
+        endSingleTimeCommands(cmdBuffer, m_context.getGraphicsQueue(), m_commandPool, si);
     }
 
     void BaseApp::generateMipmaps(vk::Image image, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) const

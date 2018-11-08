@@ -19,6 +19,15 @@ namespace vg
     constexpr bool enableValidationLayers = true;
 #endif
 
+    struct SemaphoreInfos
+    {
+        uint32_t waitSemaphoreCount = 0;
+        vk::Semaphore* waitSemaphores = nullptr;
+        uint32_t signalSemaphoreCount = 0;
+        vk::Semaphore* signalSemaphores = nullptr;
+        vk::PipelineStageFlags waitStageFlags = {};
+    };
+
     struct QueueFamilyIndices
     {
         std::optional<uint32_t> graphicsFamily;

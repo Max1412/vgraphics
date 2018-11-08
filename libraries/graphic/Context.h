@@ -79,6 +79,7 @@ namespace vg
         vk::Extent2D getSwapChainExtent() const { return m_swapChainExtent; }
         vk::Format getSwapChainImageFormat() const { return m_swapChainImageFormat; }
         std::vector<vk::ImageView> getSwapChainImageViews() const { return m_swapChainImageViews; }
+        std::vector<vk::Image> getSwapChainImages() const { return m_swapChainImages; }
         vk::SwapchainKHR getSwapChain() const { return m_swapchain; }
 
         vk::Queue getGraphicsQueue() const { return m_graphicsQueue; }

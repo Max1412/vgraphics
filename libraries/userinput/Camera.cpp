@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include "imgui/imgui.h"
 //#include "imgui.h"
 
 Camera::Camera(int width, int height) : m_width(width), m_height(height)
@@ -26,7 +27,7 @@ void Camera::reset()
 
 void Camera::update(GLFWwindow* window)
 {
-    //if (!ImGui::GetIO().WantCaptureMouse)
+    if (ImGui::GetCurrentContext() && !ImGui::GetIO().WantCaptureMouse)
     {
         double x, y;
         glfwGetCursorPos(window, &x, &y);
@@ -59,6 +60,10 @@ void Camera::update(GLFWwindow* window)
         m_oldX = static_cast<float>(x);
         m_oldY = static_cast<float>(y);
 
+        m_hasChanged = true;
+    }
+    else
+    {
         m_hasChanged = true;
     }
 }

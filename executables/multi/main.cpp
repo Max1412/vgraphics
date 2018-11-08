@@ -463,7 +463,11 @@ namespace vg
             ImGui_ImplVulkan_NewFrame();
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
+
+            ////// ImGUI WINDOWS GO HERE
             ImGui::ShowDemoWindow();
+            /////////////////////////////
+
             ImGui::Render();
 
             if(m_imguiCommandBuffers.empty())
@@ -475,27 +479,26 @@ namespace vg
 
         }
 
-        void buildImguiCmdBufferAndSubmit(uint32_t imageIndex) override
+        void buildImguiCmdBufferAndSubmit(const uint32_t imageIndex) override
         {
-            int i = imageIndex;
-            vk::RenderPassBeginInfo imguiRenderpassInfo(m_context.getImguiRenderpass(), m_swapChainFramebuffers.at(i), { {0, 0}, m_context.getSwapChainExtent() }, 0, nullptr);
+            const vk::RenderPassBeginInfo imguiRenderpassInfo(m_context.getImguiRenderpass(), m_swapChainFramebuffers.at(imageIndex), { {0, 0}, m_context.getSwapChainExtent() }, 0, nullptr);
 
-            vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+            const vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
 
             // record cmd buffer
-            m_imguiCommandBuffers.at(i).reset({});
-            m_imguiCommandBuffers.at(i).begin(beginInfo);
-            m_imguiCommandBuffers.at(i).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
-            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(i));
-            m_imguiCommandBuffers.at(i).endRenderPass();
-            m_imguiCommandBuffers.at(i).end();
+            m_imguiCommandBuffers.at(imageIndex).reset({});
+            m_imguiCommandBuffers.at(imageIndex).begin(beginInfo);
+            m_imguiCommandBuffers.at(imageIndex).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
+            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(imageIndex));
+            m_imguiCommandBuffers.at(imageIndex).endRenderPass();
+            m_imguiCommandBuffers.at(imageIndex).end();
 
             // wait rest of the rendering, submit
             vk::Semaphore waitSemaphores[] = { m_graphicsRenderFinishedSemaphores.at(m_currentFrame) };
             vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
             vk::Semaphore signalSemaphores[] = { m_guiFinishedSemaphores.at(m_currentFrame) };
 
-            vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_imguiCommandBuffers.at(imageIndex), 1, signalSemaphores);
+            const vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_imguiCommandBuffers.at(imageIndex), 1, signalSemaphores);
 
             m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
             m_context.getGraphicsQueue().submit(submitInfo, m_inFlightFences.at(m_currentFrame));
