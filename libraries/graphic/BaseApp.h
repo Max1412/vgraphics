@@ -84,7 +84,7 @@ namespace vg
 
         void setupImgui();
 
-
+        void createQueryPool(const uint32_t queryCount = 1, const vk::QueryType queryType = vk::QueryType::eTimestamp);
 
     protected:
 
@@ -112,6 +112,8 @@ namespace vg
         vk::CommandPool m_commandPool;
         vk::CommandPool m_transferCommandPool;
         vk::CommandPool m_computeCommandPool;
+
+        vk::QueryPool m_queryPool;
 
 
     };

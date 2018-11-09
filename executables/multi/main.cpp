@@ -22,6 +22,7 @@
 
 #include "imgui/imgui_impl_vulkan.h"
 #include "imgui/imgui_impl_glfw.h"
+#include "utility/Timer.h"
 
 namespace vg
 {
@@ -54,12 +55,16 @@ namespace vg
             createCommandBuffers();
             createSyncObjects();
 
+            createQueryPool();
+
             setupImgui();
         }
 
         // todo clarify what is here and what is in cleanupswapchain
         ~MultiApp()
         {
+            m_context.getDevice().destroyQueryPool(m_queryPool);
+
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indexBufferInfo.m_Buffer), m_indexBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_vertexBufferInfo.m_Buffer), m_vertexBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indirectDrawBufferInfo.m_Buffer), m_indirectDrawBufferInfo.m_BufferAllocation);
@@ -466,6 +471,7 @@ namespace vg
 
             ////// ImGUI WINDOWS GO HERE
             ImGui::ShowDemoWindow();
+            m_timer.drawGUIWindow();
             /////////////////////////////
 
             ImGui::Render();
@@ -491,6 +497,7 @@ namespace vg
             m_imguiCommandBuffers.at(imageIndex).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
             ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(imageIndex));
             m_imguiCommandBuffers.at(imageIndex).endRenderPass();
+            m_timer.CmdWriteTimestamp(m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics, m_queryPool);
             m_imguiCommandBuffers.at(imageIndex).end();
 
             // wait rest of the rendering, submit
@@ -512,6 +519,7 @@ namespace vg
                 glfwPollEvents();
                 configureImgui();
                 drawFrame();
+                m_timer.acquireCurrentTimestamp(m_context.getDevice(), m_queryPool);
             }
 
             m_context.getDevice().waitIdle();
@@ -542,6 +550,8 @@ namespace vg
         bool m_projectionChanged;
 
         Scene m_scene;
+
+        Timer m_timer;
     };
 }
 

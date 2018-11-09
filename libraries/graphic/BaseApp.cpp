@@ -162,7 +162,7 @@ namespace vg
         //if (result != vk::Result::eSuccess)
         //    throw std::runtime_error("Failed to present");
 
-        m_context.getPresentQueue().waitIdle();
+        //m_context.getPresentQueue().waitIdle();
         m_currentFrame = (m_currentFrame + 1) % m_context.max_frames_in_flight;
     }
 
@@ -415,6 +415,12 @@ namespace vg
         auto cmdBuf = beginSingleTimeCommands(m_commandPool);
         ImGui_ImplVulkan_CreateFontsTexture(static_cast<VkCommandBuffer>(cmdBuf));
         endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+    }
+
+    void BaseApp::createQueryPool(const uint32_t queryCount, const vk::QueryType queryType)
+    {
+        vk::QueryPoolCreateInfo qpinfo({}, queryType, queryCount);
+        m_queryPool = m_context.getDevice().createQueryPool(qpinfo);
     }
 }
 
