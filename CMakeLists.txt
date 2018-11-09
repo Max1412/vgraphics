@@ -86,7 +86,7 @@ foreach(subdir ${children})
 
             add_library(${subdir} ${G2_SOURCE_FILE})
             list(APPEND G2_LIBRARIES ${subdir})
-            target_link_libraries(${subdir} PRIVATE Vulkan::Vulkan)
+            target_link_libraries(${subdir} PRIVATE glfw Vulkan::Vulkan)
             set_target_properties(${subdir} PROPERTIES
 											LINKER_LANGUAGE CXX
 											CXX_STANDARD 17
