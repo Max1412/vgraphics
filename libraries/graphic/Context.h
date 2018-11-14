@@ -129,7 +129,7 @@ namespace vg
 
 		// device extensions required by app
 		std::vector<const char*> m_requiredDeviceExtensions;
-		std::optional<vk::PhysicalDeviceRaytracingPropertiesNVX> m_raytracingProperties;
+		std::optional<vk::PhysicalDeviceRayTracingPropertiesNV> m_raytracingProperties;
     };
 }
 
