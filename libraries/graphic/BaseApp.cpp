@@ -1,4 +1,7 @@
 #include "BaseApp.h"
+#include "BaseApp.h"
+#include "BaseApp.h"
+#include "BaseApp.h"
 #include "tiny/tiny_obj_loader.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -8,9 +11,11 @@
 
 namespace vg
 {
+	BaseApp::BaseApp(const std::vector<const char*>& requiredDeviceExtensions) : m_context(requiredDeviceExtensions)
+	{
+	}
 
-
-    BufferInfo BaseApp::createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties,
+	BufferInfo BaseApp::createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties,
         vk::SharingMode sharingMode, VmaAllocationCreateFlags flags) const
     {
         BufferInfo bufferInfo;
@@ -203,6 +208,36 @@ namespace vg
 
         endSingleTimeCommands(cmdBuffer, m_context.getGraphicsQueue(), m_commandPool);
     }
+
+    ImageInfo BaseApp::createTextureImageFromLoaded(const ImageLoadInfo& ili) const
+	{
+        if (!ili.pixels)
+            throw std::runtime_error("Failed to load image");
+        vk::DeviceSize imageSize = ili.texWidth * ili.texHeight * 4;
+
+        auto stagingBuffer = createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+        memcpy(stagingBuffer.m_BufferAllocInfo.pMappedData, ili.pixels, static_cast<size_t>(imageSize));
+
+        stbi_image_free(ili.pixels);
+
+        using us = vk::ImageUsageFlagBits;
+        ImageInfo returnInfo = createImage(ili.texWidth, ili.texHeight, ili.mipLevels, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
+            us::eTransferSrc | us::eTransferDst | us::eSampled, VMA_MEMORY_USAGE_GPU_ONLY);
+
+        transitionImageLayout(returnInfo.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, ili.mipLevels);
+
+        copyBufferToImage(stagingBuffer.m_Buffer, returnInfo.m_Image, ili.texWidth, ili.texHeight);
+
+        // transition happens while generating mipmaps
+        //transitionImageLayout(m_image.m_Image, vk::Format::eR8G8B8A8Unorm, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, m_textureImageMipLevels);
+
+        generateMipmaps(returnInfo.m_Image, ili.texWidth, ili.texHeight, ili.mipLevels);
+
+        vmaDestroyBuffer(m_context.getAllocator(), stagingBuffer.m_Buffer, stagingBuffer.m_BufferAllocation);
+
+        returnInfo.mipLevels = ili.mipLevels;
+        return returnInfo;
+	}
 
     ImageInfo BaseApp::createTextureImage(const char* name) const
     {

@@ -20,13 +20,20 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include "imgui/imgui_impl_vulkan.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "utility/Timer.h"
+#include "stb/stb_image.h"
+
 namespace vg
 {
 
-    class TwoPassApp : public BaseApp
+    class MultiApp : public BaseApp
     {
     public:
-        TwoPassApp() : m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height), m_scene("sponza/sponza.obj")
+        MultiApp() : BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
+			m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
+			m_scene("Exterior/exterior.obj")
         {
             createRenderPass();
             createDescriptorSetLayout();
@@ -37,12 +44,14 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            createSceneInformation("sponza/");
+            createSceneInformation("exterior/");
 
             createVertexBuffer();
             createIndexBuffer();
             createIndirectDrawBuffer();
             createPerGeometryBuffers();
+
+            createAccelerationStructure();
 
             createPerFrameInformation();
             createDescriptorPool();
@@ -50,11 +59,17 @@ namespace vg
 
             createCommandBuffers();
             createSyncObjects();
+
+            createQueryPool();
+
+            setupImgui();
         }
 
         // todo clarify what is here and what is in cleanupswapchain
-        ~TwoPassApp()
+        ~MultiApp()
         {
+            m_context.getDevice().destroyQueryPool(m_queryPool);
+
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indexBufferInfo.m_Buffer), m_indexBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_vertexBufferInfo.m_Buffer), m_vertexBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indirectDrawBufferInfo.m_Buffer), m_indirectDrawBufferInfo.m_BufferAllocation);
@@ -97,10 +112,24 @@ namespace vg
 
         void createSceneInformation(const char * foldername)
         {
-            for(const auto& mesh : m_scene.getIndexedTexturePaths())
+            // load all images
+            std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedTexturePaths().size());
+            stbi_set_flip_vertically_on_load(true);
+
+#pragma omp parallel for
+            for (int i = 0; i < m_scene.getIndexedTexturePaths().size(); i++)
+            {
+                auto path = g_resourcesPath;
+                const auto name = std::string(std::string(foldername) + m_scene.getIndexedTexturePaths().at(i).second);
+                path.append(name);
+                loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
+                loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
+            }
+
+            for (const auto& ili : loadedImages)
             {
                 // load image, fill resource, create mipmaps
-                const auto imageInfo = createTextureImage(std::string(std::string(foldername) + mesh.second).c_str());
+                const auto imageInfo = createTextureImageFromLoaded(ili);
                 m_allImages.push_back(imageInfo);
 
                 // create view for image
@@ -135,6 +164,122 @@ namespace vg
         void createPerGeometryBuffers()
         {
             m_modelMatrixBufferInfo = fillBufferTroughStagedTransfer(m_scene.getModelMatrices(), vk::BufferUsageFlagBits::eStorageBuffer);
+        }
+
+        void createAccelerationStructure()
+        {
+            //////////// NOTES ///////////////////
+            // Currenty, for simple scenes w/o animation: 1 bottom as, 1 instance, 1 top bvh
+            // Would make sense for, e.g. pica pica: 1 bottom as, N instances (for N workers), 1 top bvh
+
+            std::vector<glm::mat4x3> transforms;
+            for (const auto& modelMatrix : m_scene.getModelMatrices())
+                transforms.emplace_back(glm::transpose(modelMatrix));
+
+            m_transformBufferInfo = fillBufferTroughStagedTransfer(transforms, vk::BufferUsageFlagBits::eRayTracingNV);
+            std::vector<vk::GeometryNV> geometryVec;
+
+            // currently: 1 geometry = 1 mesh
+            size_t i = 0;
+            uint64_t indexOffset = 0;
+            for(const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
+            {
+                uint64_t vertexCount = 0;
+
+                //todo check this calculation
+                if (i < m_scene.getDrawCommandData().size())
+                    vertexCount = m_scene.getDrawCommandData().at(i + 1).vertexOffset - meshInfo.vertexOffset;
+                else
+                    vertexCount = m_scene.getVertices().size() - meshInfo.vertexOffset;
+
+                vk::GeometryTrianglesNV triangles;
+                triangles.vertexData = m_vertexBufferInfo.m_Buffer;
+                triangles.vertexOffset = meshInfo.vertexOffset * sizeof(VertexPosUvNormal);
+                triangles.vertexCount = vertexCount;
+                triangles.vertexStride = sizeof(VertexPosUvNormal);
+                triangles.vertexFormat = VertexPosUvNormal::getAttributeDescriptions().at(0).format;
+                triangles.indexData = m_indexBufferInfo.m_Buffer;
+                triangles.indexOffset = indexOffset * sizeof(std::decay_t<decltype(m_scene.getIndices())>::value_type);
+                triangles.indexCount = meshInfo.indexCount;
+                triangles.indexType = vk::IndexType::eUint32;
+                triangles.transformData = m_transformBufferInfo.m_Buffer;
+                triangles.transformOffset = i * sizeof(glm::mat4x3);
+
+                indexOffset += meshInfo.indexCount;
+
+                vk::GeometryDataNV geoData(triangles, {});
+                vk::GeometryNV geom(vk::GeometryTypeNV::eTriangles, geoData, {});
+
+                geometryVec.push_back(geom);
+                i++;
+            }
+
+            auto createActualAcc = [&]
+            (vk::AccelerationStructureTypeNV type, uint32_t geometryCount, vk::GeometryNV* geometries, uint32_t instanceCount) -> ASInfo
+            {
+                ASInfo returnInfo;
+                vk::AccelerationStructureInfoNV asInfo(type, {}, instanceCount, geometryCount, geometries);
+                vk::AccelerationStructureCreateInfoNV accStrucInfo(0, asInfo);
+                returnInfo.m_AS = m_context.getDevice().createAccelerationStructureNV(accStrucInfo);
+
+                vk::AccelerationStructureMemoryRequirementsInfoNV memReqAS(vk::AccelerationStructureMemoryRequirementsTypeNV::eObject, returnInfo.m_AS);
+                vk::MemoryRequirements2 memReqs = m_context.getDevice().getAccelerationStructureMemoryRequirementsNV(memReqAS);
+
+                VmaAllocationCreateInfo allocInfo = {};
+                allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+                vmaAllocateMemory(m_context.getAllocator(),
+                    reinterpret_cast<VkMemoryRequirements*>(&memReqs.memoryRequirements), //TODO vma doesn't know about memReq2, does this even work?
+                    &allocInfo, &returnInfo.m_BufferAllocation, &returnInfo.m_BufferAllocInfo);
+
+                //todo cleanup: destroy AS, free memory
+
+                vk::BindAccelerationStructureMemoryInfoNV bindInfo(returnInfo.m_AS, returnInfo.m_BufferAllocInfo.deviceMemory, returnInfo.m_BufferAllocInfo.offset, 0, nullptr);
+                m_context.getDevice().bindAccelerationStructureMemoryNV(bindInfo);
+
+                return returnInfo;
+            };
+
+            m_bottomAS = createActualAcc(vk::AccelerationStructureTypeNV::eBottomLevel, static_cast<uint32_t>(geometryVec.size()), geometryVec.data(), 0);
+
+            struct GeometryInstance
+            {
+                float transform[12];
+                uint32_t instanceId : 24;
+                uint32_t mask : 8;
+                uint32_t instanceOffset : 24;
+                uint32_t flags : 8;
+                uint64_t accelerationStructureHandle;
+            };
+
+            GeometryInstance instance = {};
+            glm::mat4x3 transform(glm::transpose(glm::mat4(1.0f))) ;
+            memcpy(instance.transform, glm::value_ptr(transform), sizeof(instance.transform));
+            instance.instanceId = 0;
+            instance.mask = 0xff;
+            instance.instanceOffset = 0;
+            instance.flags = 0;
+            const auto res = m_context.getDevice().getAccelerationStructureHandleNV(m_bottomAS.m_AS, sizeof(uint64_t), &instance.accelerationStructureHandle);
+            if (res != vk::Result::eSuccess) throw std::runtime_error("AS Handle could not be retrieved");
+
+            // todo this buffer is gpu only. maybe change this to make it host visible & coherent like it is in the examples.
+            // probaby wont be needed if the instanced is not transformed later on
+            m_instanceBufferInfo = fillBufferTroughStagedTransfer(std::vector<GeometryInstance>{instance}, vk::BufferUsageFlagBits::eRayTracingNV);
+
+
+            m_topAS = createActualAcc(vk::AccelerationStructureTypeNV::eTopLevel, 0, nullptr, 1);
+
+            auto GetScratchBufferSize = [&](vk::AccelerationStructureNV handle)
+            {
+                vk::AccelerationStructureMemoryRequirementsInfoNV memoryRequirementsInfo(vk::AccelerationStructureMemoryRequirementsTypeNV::eBuildScratch, handle);
+
+                vk::MemoryRequirements2 memoryRequirements = m_context.getDevice().getAccelerationStructureMemoryRequirementsNV(memoryRequirementsInfo);
+
+                VkDeviceSize result = memoryRequirements.memoryRequirements.size;
+                return result;
+            };
+
+            //TODO continue here: example 02, line 260
+
         }
 
         void createPerFrameInformation() override
@@ -361,7 +506,7 @@ namespace vg
                 vk::SampleCountFlagBits::e1,
                 vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,            // load store op
                 vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
-                vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR
+                vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal
             );
 
             vk::AttachmentReference colorAttachmentRef(0, vk::ImageLayout::eColorAttachmentOptimal);
@@ -453,12 +598,63 @@ namespace vg
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
         }
 
+        void configureImgui()
+        {
+            ImGui_ImplVulkan_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+
+            ////// ImGUI WINDOWS GO HERE
+            ImGui::ShowDemoWindow();
+            m_timer.drawGUIWindow();
+            /////////////////////////////
+
+            ImGui::Render();
+
+            if(m_imguiCommandBuffers.empty())
+            {
+                vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
+                m_imguiCommandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
+                //TODO maybe move this
+            }
+
+        }
+
+        void buildImguiCmdBufferAndSubmit(const uint32_t imageIndex) override
+        {
+            const vk::RenderPassBeginInfo imguiRenderpassInfo(m_context.getImguiRenderpass(), m_swapChainFramebuffers.at(imageIndex), { {0, 0}, m_context.getSwapChainExtent() }, 0, nullptr);
+
+            const vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+
+            // record cmd buffer
+            m_imguiCommandBuffers.at(imageIndex).reset({});
+            m_imguiCommandBuffers.at(imageIndex).begin(beginInfo);
+            m_imguiCommandBuffers.at(imageIndex).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
+            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(imageIndex));
+            m_imguiCommandBuffers.at(imageIndex).endRenderPass();
+            m_timer.CmdWriteTimestamp(m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics, m_queryPool);
+            m_imguiCommandBuffers.at(imageIndex).end();
+
+            // wait rest of the rendering, submit
+            vk::Semaphore waitSemaphores[] = { m_graphicsRenderFinishedSemaphores.at(m_currentFrame) };
+            vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+            vk::Semaphore signalSemaphores[] = { m_guiFinishedSemaphores.at(m_currentFrame) };
+
+            const vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_imguiCommandBuffers.at(imageIndex), 1, signalSemaphores);
+
+            m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
+            m_context.getGraphicsQueue().submit(submitInfo, m_inFlightFences.at(m_currentFrame));
+
+        }
+
         void mainLoop()
         {
             while (!glfwWindowShouldClose(m_context.getWindow()))
             {
                 glfwPollEvents();
+                configureImgui();
                 drawFrame();
+                m_timer.acquireCurrentTimestamp(m_context.getDevice(), m_queryPool);
             }
 
             m_context.getDevice().waitIdle();
@@ -489,12 +685,21 @@ namespace vg
         bool m_projectionChanged;
 
         Scene m_scene;
+
+        Timer m_timer;
+
+
+        BufferInfo m_transformBufferInfo;
+        ASInfo m_bottomAS;
+        BufferInfo m_instanceBufferInfo;
+        ASInfo m_topAS;
+
     };
 }
 
 int main()
 {
-    vg::TwoPassApp app;
+    vg::MultiApp app;
 
     try
     {

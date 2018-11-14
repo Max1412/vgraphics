@@ -23,6 +23,7 @@
 #include "imgui/imgui_impl_vulkan.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "utility/Timer.h"
+#include "stb/stb_image.h"
 
 namespace vg
 {
@@ -30,7 +31,10 @@ namespace vg
     class MultiApp : public BaseApp
     {
     public:
-        MultiApp() : m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height), m_scene("sponza/sponza.obj")
+        MultiApp() :
+    		BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters" }),
+    		m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
+    		m_scene("Exterior/exterior.obj")
         {
             createRenderPass();
             createDescriptorSetLayout();
@@ -41,7 +45,7 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            createSceneInformation("sponza/");
+            createSceneInformation("exterior/");
 
             createVertexBuffer();
             createIndexBuffer();
@@ -107,10 +111,24 @@ namespace vg
 
         void createSceneInformation(const char * foldername)
         {
-            for(const auto& mesh : m_scene.getIndexedTexturePaths())
+			// load all images
+			std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedTexturePaths().size());
+            stbi_set_flip_vertically_on_load(true);
+
+#pragma omp parallel for
+			for (int i = 0; i < m_scene.getIndexedTexturePaths().size(); i++)
+			{
+                auto path = g_resourcesPath;
+                const auto name = std::string(std::string(foldername) + m_scene.getIndexedTexturePaths().at(i).second);
+                path.append(name);
+                loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
+                loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
+			}
+
+            for (const auto& ili : loadedImages)
             {
                 // load image, fill resource, create mipmaps
-                const auto imageInfo = createTextureImage(std::string(std::string(foldername) + mesh.second).c_str());
+                const auto imageInfo = createTextureImageFromLoaded(ili);
                 m_allImages.push_back(imageInfo);
 
                 // create view for image

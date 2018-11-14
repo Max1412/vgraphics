@@ -27,7 +27,7 @@ namespace help
 
 namespace vg
 {
-    Context::Context()
+	Context::Context(const std::vector<const char*>& requiredDeviceExtensions) : m_requiredDeviceExtensions(requiredDeviceExtensions)
     {
         initWindow();
         initVulkan();
@@ -230,8 +230,16 @@ namespace vg
         auto properties = physDevice.getProperties();
         auto features = physDevice.getFeatures();
 
-        //device.getProperties().vendorID NVIDIA only?
-
+		vk::PhysicalDeviceProperties2 props;
+		if(std::find_if(m_requiredDeviceExtensions.begin(), m_requiredDeviceExtensions.end(),
+			[](const char* input){ return (strcmp(input, "VK_NV_ray_tracing") == 0); })
+			!= m_requiredDeviceExtensions.end())
+		{
+			m_raytracingProperties.emplace();
+			props.pNext = &m_raytracingProperties.value();
+		}
+		physDevice.getProperties2(&props); //NVIDIA only?
+		
         // look for a GPU with geometry shader
         const bool suitable = (properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu ||
             properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu)
@@ -258,7 +266,7 @@ namespace vg
     {
         auto availableExtensions = physDevice.enumerateDeviceExtensionProperties();
 
-        std::set<std::string> requiredExtensions(g_deviceExtensions.begin(), g_deviceExtensions.end());
+        std::set<std::string> requiredExtensions(m_requiredDeviceExtensions.begin(), m_requiredDeviceExtensions.end());
 
         for (const auto& extension : availableExtensions)
             requiredExtensions.erase(extension.extensionName);
@@ -319,7 +327,7 @@ namespace vg
         vk::DeviceCreateInfo createInfo({},
             static_cast<uint32_t>(queueCreateInfos.size()), queueCreateInfos.data(),
             0, nullptr,
-            static_cast<uint32_t>(g_deviceExtensions.size()), g_deviceExtensions.data(), &deviceFeatures);
+            static_cast<uint32_t>(m_requiredDeviceExtensions.size()), m_requiredDeviceExtensions.data(), &deviceFeatures);
 
         if constexpr (enableValidationLayers)
         {

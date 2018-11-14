@@ -11,7 +11,7 @@ namespace vg
     class Context
     {
     public:
-        Context();
+        Context(const std::vector<const char*>& requiredDeviceExtensions);
         ~Context();
 
         void initWindow();
@@ -42,7 +42,7 @@ namespace vg
 
         bool isDeviceSuitable(vk::PhysicalDevice physDevice);
 
-        static bool checkDeviceExtensionSupport(vk::PhysicalDevice physDevice);
+        bool checkDeviceExtensionSupport(vk::PhysicalDevice physDevice);
 
         QueueFamilyIndices findQueueFamilies(vk::PhysicalDevice physDevice) const;
 
@@ -126,6 +126,10 @@ namespace vg
         // imgui objects
         vk::DescriptorPool m_imguiDescriptorPool;
         vk::RenderPass m_imguiRenderpass;
+
+		// device extensions required by app
+		std::vector<const char*> m_requiredDeviceExtensions;
+		std::optional<vk::PhysicalDeviceRaytracingPropertiesNVX> m_raytracingProperties;
     };
 }
 

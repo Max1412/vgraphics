@@ -35,5 +35,5 @@ layout(set = 0, binding = 3) uniform sampler2D allTextures[NUM_TEXTURES];
 void main()
 {
     outColor = texture(allTextures[perMeshInfos.perMesh[drawID].texIndex], fragTexCoord);
-    outColor += vec4(passNormal, 1.0);
+    //outColor += vec4(passNormal, 1.0);
 }

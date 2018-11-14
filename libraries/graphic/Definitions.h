@@ -18,6 +18,12 @@ namespace vg
 #else
     constexpr bool enableValidationLayers = true;
 #endif
+    struct ImageLoadInfo
+    {
+        unsigned char* pixels;
+        int texWidth, texHeight, texChannels;
+        uint32_t mipLevels;
+    };
 
     struct SemaphoreInfos
     {

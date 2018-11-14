@@ -28,7 +28,9 @@ namespace vg
     class App : public vg::BaseApp
     {
     public:
-        App() : m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height)
+        App() :
+			BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters" }), 
+    		m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height)
         {
             createRenderPass();
             createDescriptorSetLayout();

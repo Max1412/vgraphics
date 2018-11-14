@@ -26,7 +26,8 @@ namespace vg
     class FSApp : public BaseApp
     {
     public:
-        FSApp()
+        FSApp() :
+			BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters" })
         {
             createRenderPass();
 

@@ -8,6 +8,13 @@
 namespace vg
 {
 
+    struct ASInfo
+    {
+        vk::AccelerationStructureNV m_AS = nullptr;
+        VmaAllocation m_BufferAllocation = nullptr;
+        VmaAllocationInfo m_BufferAllocInfo = {};
+    };
+
     struct BufferInfo
     {
         vk::Buffer m_Buffer = nullptr;
@@ -33,6 +40,7 @@ namespace vg
     class BaseApp
     {
     public:
+		BaseApp(const std::vector<const char*>& requiredDeviceExtensions);
         virtual void recreateSwapChain() = 0;
 
         // todo maybe make this more generic e.g. "update per-frame information"
@@ -71,6 +79,8 @@ namespace vg
             const VmaMemoryUsage properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0) const;
 
         void copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) const;
+
+        ImageInfo createTextureImageFromLoaded(const ImageLoadInfo & ili) const;
 
         ImageInfo createTextureImage(const char* name) const;
 
