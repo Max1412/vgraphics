@@ -96,6 +96,8 @@ namespace vg
 
         vk::RenderPass getImguiRenderpass() const { return m_imguiRenderpass; }
 
+        vk::PhysicalDeviceRayTracingPropertiesNV getRaytracingProperties() { return m_raytracingProperties.value(); }
+
     private:
         // vk initialisation objects
         vk::Instance m_instance;

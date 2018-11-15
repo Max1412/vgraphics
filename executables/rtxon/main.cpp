@@ -303,6 +303,78 @@ namespace vg
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
         }
 
+        void createRTPipeline()
+        {
+            //// 1. DSL
+
+            // AS
+            vk::DescriptorSetLayoutBinding asLB(0, vk::DescriptorType::eAccelerationStructureNV, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+            // Image Load/Store for output
+            vk::DescriptorSetLayoutBinding oiLB(1, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+
+            std::array<vk::DescriptorSetLayoutBinding, 2> bindings = { asLB, oiLB };
+
+            vk::DescriptorSetLayoutCreateInfo layoutInfo({}, bindings.size(), bindings.data());
+
+            m_rayTracingDescriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
+
+            //// 2. Create Pipeline
+
+            const auto rgenShaderCode = Utility::readFile("rtxon/shader.rgen.spv");
+            const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
+            const vk::PipelineShaderStageCreateInfo rgenShaderStageInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main");
+            std::array< vk::PipelineShaderStageCreateInfo, 1> shaderStages = { rgenShaderStageInfo };
+
+            vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, 1, &m_rayTracingDescriptorSetLayout, 0, nullptr);
+
+            m_rayTracingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutCreateInfo);
+            std::array<vk::RayTracingShaderGroupCreateInfoNV, 1> shaderGroups{ vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV} };
+
+            vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
+                shaderStages.size(), shaderStages.data(),
+                shaderGroups.size(), shaderGroups.data(),
+                m_context.getRaytracingProperties().maxRecursionDepth,
+                m_rayTracingPipelineLayout,
+                nullptr, 0
+            );
+
+            m_rayTracingPipeline = m_context.getDevice().createRayTracingPipelinesNV(nullptr, rayPipelineInfo).at(0);
+
+            //// 3. Create Shader Binding Table
+
+            const uint32_t groupNum = 1; // 1 group is listed in pGroupNumbers in VkRayTracingPipelineCreateInfoNV
+            const uint32_t shaderBindingTableSize = m_context.getRaytracingProperties().shaderGroupHandleSize * groupNum;
+
+            m_sbtInfo = createBuffer(shaderBindingTableSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            void* mappedData;
+            vmaMapMemory(m_context.getAllocator(), m_sbtInfo.m_BufferAllocation, &mappedData);
+            const auto res = m_context.getDevice().getRayTracingShaderGroupHandlesNV(m_rayTracingPipeline, 0, groupNum, shaderBindingTableSize, mappedData);
+            if (res != vk::Result::eSuccess) throw std::runtime_error("Failed to retrieve Shader Group Handles");
+            vmaUnmapMemory(m_context.getAllocator(), m_sbtInfo.m_BufferAllocation);
+
+            //// 4. Create Descriptor Set
+
+            //todo delete this pool, use the other existing one instead (?)
+            std::array<vk::DescriptorPoolSize, 2> poolSizes = { 
+                vk::DescriptorPoolSize{vk::DescriptorType::eStorageImage, 1},
+                vk::DescriptorPoolSize{vk::DescriptorType::eAccelerationStructureNV}
+            };
+
+            vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo({}, 1, poolSizes.size(), poolSizes.data());
+            m_rayTracingDescriptorPool = m_context.getDevice().createDescriptorPool(descriptorPoolCreateInfo);
+
+            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_rayTracingDescriptorPool, 1, &m_rayTracingDescriptorSetLayout);
+            m_rayTracingDescriptorSet = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo).at(0);
+
+            vk::WriteDescriptorSetAccelerationStructureNV descriptorSetAccelerationStructureInfo(1, &m_topAS.m_AS);
+            vk::WriteDescriptorSet accelerationStructureWrite(m_rayTracingDescriptorSet, 0, 0, 1, vk::DescriptorType::eAccelerationStructureNV, nullptr, nullptr, nullptr);
+            accelerationStructureWrite.pNext = &descriptorSetAccelerationStructureInfo; // pNext is assigned here!!!
+
+            //TODO: the tutorial writes in an offscreen image, and copies it into the swapchain every frame. does this make sense? shoudl i do this too?
+            //todo: alternative: create 3 descriptor-whatevers (pipelines?) and bind the one with the current spwachain image...
+            vk::DescriptorImageInfo descriptorOutputImageInfo(nullptr, /* (offscreen?) output image */);
+        }
+
         void createPerFrameInformation() override
         {
             m_camera = Pilotview(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height);
@@ -709,13 +781,18 @@ namespace vg
 
         Timer m_timer;
 
-
+        // RT stuff
         BufferInfo m_transformBufferInfo;
         ASInfo m_bottomAS;
         BufferInfo m_instanceBufferInfo;
         ASInfo m_topAS;
         BufferInfo m_scratchBuffer;
-
+        vk::DescriptorSetLayout m_rayTracingDescriptorSetLayout;
+        vk::PipelineLayout m_rayTracingPipelineLayout;
+        vk::Pipeline m_rayTracingPipeline;
+        BufferInfo m_sbtInfo;
+        vk::DescriptorPool m_rayTracingDescriptorPool;
+        vk::DescriptorSet m_rayTracingDescriptorSet;
     };
 }
 
