@@ -2,6 +2,7 @@
 #include "BaseApp.h"
 #include "BaseApp.h"
 #include "BaseApp.h"
+#include "BaseApp.h"
 #include "tiny/tiny_obj_loader.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -310,11 +311,8 @@ namespace vg
         transitionImageLayout(m_depthImage.m_Image, depthFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
     }
 
-    void BaseApp::transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels,
-        const SemaphoreInfos& si) const
+    void BaseApp::transitionInCmdBuf(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels, vk::CommandBuffer cmdBuffer) const
     {
-        auto cmdBuffer = beginSingleTimeCommands(m_commandPool);
-
         using il = vk::ImageLayout;
         using af = vk::AccessFlagBits;
         using ps = vk::PipelineStageFlagBits;
@@ -373,12 +371,37 @@ namespace vg
             sourceStage = ps::eColorAttachmentOutput;
             destinationStage = ps::eAllCommands;
         }
+        else if (oldLayout == il::eGeneral && newLayout == il::eColorAttachmentOptimal)
+        {
+            barrier.srcAccessMask = af::eShaderWrite;
+            barrier.dstAccessMask = af::eColorAttachmentWrite;
+
+            sourceStage = ps::eRayTracingShaderNV;
+            destinationStage = ps::eColorAttachmentOutput;
+        }
+        else if (oldLayout == il::ePresentSrcKHR && newLayout == il::eGeneral)
+        {
+            barrier.srcAccessMask = af::eColorAttachmentWrite;
+            barrier.dstAccessMask = af::eShaderWrite;
+
+            sourceStage = ps::eAllCommands;
+            destinationStage = ps::eRayTracingShaderNV;
+        }
         else
         {
             throw std::invalid_argument("unsupported layout transition!");
         }
 
         cmdBuffer.pipelineBarrier(sourceStage, destinationStage, static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr, 1, &barrier);
+	}
+ 
+
+    void BaseApp::transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels,
+        const SemaphoreInfos& si) const
+    {
+        auto cmdBuffer = beginSingleTimeCommands(m_commandPool);
+
+        transitionInCmdBuf(image, format, oldLayout, newLayout, mipLevels, cmdBuffer);
 
         endSingleTimeCommands(cmdBuffer, m_context.getGraphicsQueue(), m_commandPool, si);
     }

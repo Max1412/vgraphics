@@ -88,6 +88,8 @@ namespace vg
 
         void createDepthResources();
 
+        void transitionInCmdBuf(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels, vk::CommandBuffer cmdBuffer) const;
+
         void transitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels = 1, const SemaphoreInfos& si = {}) const;
 
         void generateMipmaps(vk::Image image, int32_t texWidth, int32_t texHeight, uint32_t mipLevels) const;
@@ -124,8 +126,7 @@ namespace vg
         vk::CommandPool m_computeCommandPool;
 
         vk::QueryPool m_queryPool;
-
-
+        
     };
 
     template <typename T>

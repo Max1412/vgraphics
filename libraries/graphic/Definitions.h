@@ -4,10 +4,11 @@
 #include <vulkan/vulkan.hpp>
 #include "glm/glm.hpp"
 #include <fstream>
+#include <iostream>
 
 namespace vg
 {
-    const std::vector<const char*> g_validationLayers = { "VK_LAYER_LUNARG_standard_validation", "VK_LAYER_LUNARG_assistant_layer" };
+    const std::vector<const char*> g_validationLayers;// = { "VK_LAYER_LUNARG_standard_validation", "VK_LAYER_LUNARG_assistant_layer" };
     const std::vector<const char*> g_deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters" };
 
     const auto g_resourcesPath = std::filesystem::current_path().parent_path().parent_path().append("resources");

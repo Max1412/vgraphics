@@ -52,6 +52,7 @@ namespace vg
             createPerGeometryBuffers();
 
             createAccelerationStructure();
+            createRTPipeline();
 
             createPerFrameInformation();
             createDescriptorPool();
@@ -168,6 +169,7 @@ namespace vg
 
         void createAccelerationStructure()
         {
+            //vkCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdBuildAccelerationStructureNV"));
             //////////// NOTES ///////////////////
             // Currenty, for simple scenes w/o animation: 1 bottom as, 1 instance, 1 top bvh
             // Would make sense for, e.g. pica pica: 1 bottom as, N instances (for N workers), 1 top bvh
@@ -187,7 +189,7 @@ namespace vg
                 uint64_t vertexCount = 0;
 
                 //todo check this calculation
-                if (i < m_scene.getDrawCommandData().size())
+                if (i < m_scene.getDrawCommandData().size()-1)
                     vertexCount = m_scene.getDrawCommandData().at(i + 1).vertexOffset - meshInfo.vertexOffset;
                 else
                     vertexCount = m_scene.getVertices().size() - meshInfo.vertexOffset;
@@ -292,12 +294,17 @@ namespace vg
             );
 #define MemoryBarrier __faststorefence
 
+            //todo remove this when the SDK update happened
+            auto OwnCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdBuildAccelerationStructureNV"));
+
             vk::AccelerationStructureInfoNV asInfoBot(vk::AccelerationStructureTypeNV::eBottomLevel, {}, 0, geometryVec.size(), geometryVec.data());
-            cmdBuf.buildAccelerationStructureNV(asInfoBot, nullptr, 0, VK_FALSE, m_bottomAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
+            OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoBot), nullptr, 0, VK_FALSE, m_bottomAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
+            //cmdBuf.buildAccelerationStructureNV(asInfoBot, nullptr, 0, VK_FALSE, m_bottomAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, {}, memoryBarrier, nullptr, nullptr);
 
             vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, {}, 1, 0, nullptr);
-            cmdBuf.buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
+            OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoTop), m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
+            //cmdBuf.buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
 
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
@@ -354,25 +361,71 @@ namespace vg
 
             //// 4. Create Descriptor Set
 
+            // deviation from tutorial: I'm creating multiple descriptor set, and binding the one with the current swap chain image
+
             //todo delete this pool, use the other existing one instead (?)
             std::array<vk::DescriptorPoolSize, 2> poolSizes = { 
                 vk::DescriptorPoolSize{vk::DescriptorType::eStorageImage, 1},
-                vk::DescriptorPoolSize{vk::DescriptorType::eAccelerationStructureNV}
+                vk::DescriptorPoolSize{vk::DescriptorType::eAccelerationStructureNV, 1}
             };
 
-            vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo({}, 1, poolSizes.size(), poolSizes.data());
+            vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo({}, m_swapChainFramebuffers.size(), poolSizes.size(), poolSizes.data());
             m_rayTracingDescriptorPool = m_context.getDevice().createDescriptorPool(descriptorPoolCreateInfo);
 
-            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_rayTracingDescriptorPool, 1, &m_rayTracingDescriptorSetLayout);
-            m_rayTracingDescriptorSet = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo).at(0);
+            // create n descriptor sets
+            std::vector<vk::DescriptorSetLayout> dsls(m_swapChainFramebuffers.size(), m_rayTracingDescriptorSetLayout);
+            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_rayTracingDescriptorPool, m_swapChainFramebuffers.size(), dsls.data());
+            m_rayTracingDescriptorSets = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo);
 
-            vk::WriteDescriptorSetAccelerationStructureNV descriptorSetAccelerationStructureInfo(1, &m_topAS.m_AS);
-            vk::WriteDescriptorSet accelerationStructureWrite(m_rayTracingDescriptorSet, 0, 0, 1, vk::DescriptorType::eAccelerationStructureNV, nullptr, nullptr, nullptr);
-            accelerationStructureWrite.pNext = &descriptorSetAccelerationStructureInfo; // pNext is assigned here!!!
+            std::array<vk::WriteDescriptorSet, 2> descriptorWrites;
+            for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
+            {
+                vk::WriteDescriptorSetAccelerationStructureNV descriptorSetAccelerationStructureInfo(1, &m_topAS.m_AS);
+                vk::WriteDescriptorSet accelerationStructureWrite(m_rayTracingDescriptorSets.at(i), 0, 0, 1, vk::DescriptorType::eAccelerationStructureNV, nullptr, nullptr, nullptr);
+                accelerationStructureWrite.setPNext(&descriptorSetAccelerationStructureInfo); // pNext is assigned here!!!
+                
+                // the tutorial always writes to the same image. Here, multiple descriptor sets each corresponding to a swapchain image are created
+                vk::DescriptorImageInfo descriptorOutputImageInfo(nullptr, m_context.getSwapChainImageViews().at(i), vk::ImageLayout::eGeneral); // maybe layout colorAttachment?
+                vk::WriteDescriptorSet outputImageWrite(m_rayTracingDescriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eStorageImage, &descriptorOutputImageInfo, nullptr, nullptr);
+                descriptorWrites = { accelerationStructureWrite, outputImageWrite };
+            }
+            m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
+        }
 
-            //TODO: the tutorial writes in an offscreen image, and copies it into the swapchain every frame. does this make sense? shoudl i do this too?
-            //todo: alternative: create 3 descriptor-whatevers (pipelines?) and bind the one with the current spwachain image...
-            vk::DescriptorImageInfo descriptorOutputImageInfo(nullptr, /* (offscreen?) output image */);
+        void createCommandBuffers()
+        {
+            vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
+            m_commandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
+
+            for (size_t i = 0; i < m_commandBuffers.size(); i++)
+            {
+                vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+
+                // begin recording
+                m_commandBuffers.at(i).begin(beginInfo);
+
+                // transition image to make it accessible by imageStore
+                transitionInCmdBuf(m_context.getSwapChainImages().at(i), m_context.getSwapChainImageFormat(), vk::ImageLayout::ePresentSrcKHR, vk::ImageLayout::eGeneral, 1, m_commandBuffers.at(i));
+
+                m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipeline);
+                m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipelineLayout, 0, 1, &m_rayTracingDescriptorSets.at(i), 0, nullptr);
+
+
+                //m_commandBuffers.at(i).traceRaysNV(
+                auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
+                OwnCmdTraceRays(m_commandBuffers.at(i),
+                    m_sbtInfo.m_Buffer, 0,
+                    m_sbtInfo.m_Buffer, 0, m_context.getRaytracingProperties().shaderGroupHandleSize,
+                    m_sbtInfo.m_Buffer, 0, m_context.getRaytracingProperties().shaderGroupHandleSize,
+                    nullptr, 0, 0, m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
+                );
+
+                // transition image for to use it for imgui
+                transitionInCmdBuf(m_context.getSwapChainImages().at(i), m_context.getSwapChainImageFormat(), vk::ImageLayout::eGeneral, vk::ImageLayout::eColorAttachmentOptimal, 1, m_commandBuffers.at(i));
+
+                // stop recording
+                m_commandBuffers.at(i).end();
+            }
         }
 
         void createPerFrameInformation() override
@@ -633,43 +686,43 @@ namespace vg
 
         }
 
-        void createCommandBuffers()
-        {
-            vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
+        //void createCommandBuffers()
+        //{
+        //    vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
 
-            m_commandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
+        //    m_commandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
 
-            for (size_t i = 0; i < m_commandBuffers.size(); i++)
-            {
-                vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+        //    for (size_t i = 0; i < m_commandBuffers.size(); i++)
+        //    {
+        //        vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
 
-                // begin recording
-                m_commandBuffers.at(i).begin(beginInfo);
+        //        // begin recording
+        //        m_commandBuffers.at(i).begin(beginInfo);
 
-                std::array<vk::ClearValue, 2> clearColors = { vk::ClearValue{std::array<float, 4>{ 0.1f, 0.1f, 0.1f, 1.0f }}, vk::ClearDepthStencilValue{1.0f, 0} };
-                vk::RenderPassBeginInfo renderpassInfo(m_renderpass, m_swapChainFramebuffers.at(i), { {0, 0}, m_context.getSwapChainExtent() }, static_cast<uint32_t>(clearColors.size()), clearColors.data());
+        //        std::array<vk::ClearValue, 2> clearColors = { vk::ClearValue{std::array<float, 4>{ 0.1f, 0.1f, 0.1f, 1.0f }}, vk::ClearDepthStencilValue{1.0f, 0} };
+        //        vk::RenderPassBeginInfo renderpassInfo(m_renderpass, m_swapChainFramebuffers.at(i), { {0, 0}, m_context.getSwapChainExtent() }, static_cast<uint32_t>(clearColors.size()), clearColors.data());
 
-                /////////////////////////////
-                // actual commands start here
-                /////////////////////////////
-                m_commandBuffers.at(i).beginRenderPass(renderpassInfo, vk::SubpassContents::eInline);
+        //        /////////////////////////////
+        //        // actual commands start here
+        //        /////////////////////////////
+        //        m_commandBuffers.at(i).beginRenderPass(renderpassInfo, vk::SubpassContents::eInline);
 
-                m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
+        //        m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
-                m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBufferInfo.m_Buffer, 0ull);
-                m_commandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint32);
+        //        m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBufferInfo.m_Buffer, 0ull);
+        //        m_commandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint32);
 
-                m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(0), 0, nullptr);
+        //        m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(0), 0, nullptr);
 
-                m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()),
-                    sizeof(std::decay_t<decltype(*m_scene.getDrawCommandData().data())>));
+        //        m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()),
+        //            sizeof(std::decay_t<decltype(*m_scene.getDrawCommandData().data())>));
 
-                m_commandBuffers.at(i).endRenderPass();
+        //        m_commandBuffers.at(i).endRenderPass();
 
-                // stop recording
-                m_commandBuffers.at(i).end();
-            }
-        }
+        //        // stop recording
+        //        m_commandBuffers.at(i).end();
+        //    }
+        //}
 
         void updatePerFrameInformation(uint32_t currentImage) override
         {
@@ -792,7 +845,9 @@ namespace vg
         vk::Pipeline m_rayTracingPipeline;
         BufferInfo m_sbtInfo;
         vk::DescriptorPool m_rayTracingDescriptorPool;
-        vk::DescriptorSet m_rayTracingDescriptorSet;
+        std::vector<vk::DescriptorSet> m_rayTracingDescriptorSets;
+        std::vector<vk::CommandBuffer> m_rayTracingCommandBuffers;
+
     };
 }
 
