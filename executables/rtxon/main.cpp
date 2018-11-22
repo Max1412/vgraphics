@@ -51,7 +51,7 @@ namespace vg
             //createIndirectDrawBuffer();
             //createPerGeometryBuffers();
 
-            //createAccelerationStructure();
+            createAccelerationStructure();
             createRTPipeline();
 
             createPerFrameInformation();
@@ -487,7 +487,7 @@ namespace vg
                 // the tutorial always writes to the same image. Here, multiple descriptor sets each corresponding to a swapchain image are created
                 vk::DescriptorImageInfo descriptorOutputImageInfo(nullptr, m_context.getSwapChainImageViews().at(i), vk::ImageLayout::eGeneral); // maybe layout colorAttachment?
                 vk::WriteDescriptorSet outputImageWrite(m_rayTracingDescriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eStorageImage, &descriptorOutputImageInfo, nullptr, nullptr);
-                std::array<vk::WriteDescriptorSet, 1> descriptorWrites = { outputImageWrite };
+                std::array<vk::WriteDescriptorSet, 2> descriptorWrites = { accelerationStructureWrite, outputImageWrite };
                 m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
             }
         }
