@@ -14,6 +14,8 @@ namespace vg
 {
 	BaseApp::BaseApp(const std::vector<const char*>& requiredDeviceExtensions) : m_context(requiredDeviceExtensions)
 	{
+        m_swapChainFramebuffers.resize(m_context.getSwapChainImageViews().size());
+
 	}
 
 	BufferInfo BaseApp::createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties,
@@ -362,6 +364,14 @@ namespace vg
 
             sourceStage = ps::eTopOfPipe;
             destinationStage = ps::eEarlyFragmentTests;
+        }
+        else if (oldLayout == il::eUndefined && newLayout == il::eGeneral)
+        {
+            barrier.srcAccessMask = static_cast<af>(0);
+            barrier.dstAccessMask = af::eShaderWrite;
+
+            sourceStage = ps::eTopOfPipe;
+            destinationStage = ps::eComputeShader;
         }
         else if (oldLayout == il::eColorAttachmentOptimal && newLayout == il::ePresentSrcKHR)
         {

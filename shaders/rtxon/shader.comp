@@ -1,0 +1,14 @@
+#version 460
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform image2D image;
+
+
+void main()
+{
+    const vec2 pixelCenter = vec2(gl_WorkGroupID.xy) + vec2(0.5);
+    const vec2 inUV = pixelCenter/vec2(gl_NumWorkGroups.xy);
+
+    imageStore(image, ivec2(gl_WorkGroupID.xy), vec4(inUV.x, inUV.y, 0.0, 0.0));
+}

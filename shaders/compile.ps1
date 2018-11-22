@@ -1,11 +1,11 @@
 Write-Output "Compiling shaders..."
 
-$types = @("*.vert", "*.frag", "*.tesc", "*.tese", "*.geom", "*.comp")
+$types = @("*.vert", "*.frag", "*.tesc", "*.tese", "*.geom", "*.comp", "*.rgen")
 $files = Get-Childitem -Include $types -Recurse -File
 
 foreach($file in $files)
 {
-    $command = "C:\VulkanSDK\1.1.85.0\Bin32\glslangValidator.exe -V $file -o $file.spv"
+    $command = "D:\mmader\shaderc\BUILD\glslc\Debug\glslc.exe $file -o $file.spv -c"
     #Write-Output $command
     Invoke-Expression $command
 }
