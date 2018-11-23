@@ -427,18 +427,36 @@ namespace vg
 
             //// 2. Create Pipeline
 
-            const auto rgenShaderCode = Utility::readFile("rtxon/shader.rgen.spv");
+            const auto rgenShaderCode = Utility::readFile("rtxon/rt_06_shaders.rgen.spv");
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
-            const vk::PipelineShaderStageCreateInfo rgenShaderStageInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main");
-            std::array< vk::PipelineShaderStageCreateInfo, 1> shaderStages = { rgenShaderStageInfo };
+
+            const auto chitShaderCode = Utility::readFile("rtxon/rt_06_shaders.rchit.spv");
+            const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
+
+            const auto missShaderCode = Utility::readFile("rtxon/rt_06_shaders.rmiss.spv");
+            const auto missShaderModule = m_context.createShaderModule(missShaderCode);
+
+            const std::array<vk::PipelineShaderStageCreateInfo, 3> rtShaderStageInfos = {
+                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
+                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
+                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main"),
+            };
 
             vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, 1, &m_rayTracingDescriptorSetLayout, 0, nullptr);
 
             m_rayTracingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutCreateInfo);
-            std::array<vk::RayTracingShaderGroupCreateInfoNV, 1> shaderGroups{ vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV} };
+
+            std::array<vk::RayTracingShaderGroupCreateInfoNV, 3> shaderGroups = {
+                // group 0: raygen
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
+                // group 1: closest hit
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
+                // group 2: miss
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
+            };
 
             vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
-                shaderStages.size(), shaderStages.data(),
+                rtShaderStageInfos.size(), rtShaderStageInfos.data(),
                 shaderGroups.size(), shaderGroups.data(),
                 m_context.getRaytracingProperties().maxRecursionDepth,
                 m_rayTracingPipelineLayout,
@@ -449,20 +467,19 @@ namespace vg
 
             //// 3. Create Shader Binding Table
 
-            const uint32_t groupNum = 1; // 1 group is listed in pGroupNumbers in VkRayTracingPipelineCreateInfoNV
-            const uint32_t shaderBindingTableSize = m_context.getRaytracingProperties().shaderGroupHandleSize * groupNum;
+            const uint32_t shaderBindingTableSize = m_context.getRaytracingProperties().shaderGroupHandleSize * rayPipelineInfo.groupCount;
 
             m_sbtInfo = createBuffer(shaderBindingTableSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_TO_GPU);
             void* mappedData;
             vmaMapMemory(m_context.getAllocator(), m_sbtInfo.m_BufferAllocation, &mappedData);
             vmaMapMemory(m_context.getAllocator(), m_sbtInfo.m_BufferAllocation, &mappedData);
-            const auto res = m_context.getDevice().getRayTracingShaderGroupHandlesNV(m_rayTracingPipeline, 0, groupNum, shaderBindingTableSize, mappedData);
+            const auto res = m_context.getDevice().getRayTracingShaderGroupHandlesNV(m_rayTracingPipeline, 0, rayPipelineInfo.groupCount, shaderBindingTableSize, mappedData);
             if (res != vk::Result::eSuccess) throw std::runtime_error("Failed to retrieve Shader Group Handles");
             vmaUnmapMemory(m_context.getAllocator(), m_sbtInfo.m_BufferAllocation);
 
             //// 4. Create Descriptor Set
 
-            // deviation from tutorial: I'm creating multiple descriptor set, and binding the one with the current swap chain image
+            // deviation from tutorial: I'm creating multiple descriptor sets, and binding the one with the current swap chain image
 
             //todo delete this pool, use the other existing one instead (?)
             std::array<vk::DescriptorPoolSize, 2> poolSizes = { 
@@ -514,10 +531,11 @@ namespace vg
                 //m_commandBuffers.at(i).traceRaysNV(
                 auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
                 OwnCmdTraceRays(m_commandBuffers.at(i),
-                    m_sbtInfo.m_Buffer, 0,
-                    m_sbtInfo.m_Buffer, 0, m_context.getRaytracingProperties().shaderGroupHandleSize,
-                    m_sbtInfo.m_Buffer, 0, m_context.getRaytracingProperties().shaderGroupHandleSize,
-                    nullptr, 0, 0, m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
+                    m_sbtInfo.m_Buffer, 0, // raygen
+                    m_sbtInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+                    m_sbtInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // hit
+                    nullptr, 0, 0, // callable
+                    m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
                 );
 
                 //m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eCompute, m_computePipeline);
