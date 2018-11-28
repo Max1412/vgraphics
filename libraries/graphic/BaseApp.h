@@ -45,7 +45,7 @@ namespace vg
 
         // todo maybe make this more generic e.g. "update per-frame information"
         virtual void updatePerFrameInformation(uint32_t) = 0;
-        virtual void createPerFrameInformation() = 0;
+        //virtual void createPerFrameInformation() = 0;
 
         virtual void buildImguiCmdBufferAndSubmit(const uint32_t imageIndex)
         {

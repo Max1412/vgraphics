@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/matrix_major_storage.hpp>
 
 #define VMA_IMPLEMENTATION
 #include "vma/vk_mem_alloc.h"
@@ -25,6 +26,7 @@
 #include "utility/Timer.h"
 #include "stb/stb_image.h"
 
+
 namespace vg
 {
 
@@ -32,8 +34,8 @@ namespace vg
     {
     public:
         MultiApp() : BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
-			m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height)
-			//m_scene("Exterior/exterior.obj")
+			m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
+			m_scene("bunnyPlane/bunnyPlane.obj")
         {
             createRenderPass();
             //createDescriptorSetLayout();
@@ -44,7 +46,7 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            //createSceneInformation("exterior/");
+            createSceneInformation("bunnyPlane/");
 
             createVertexBuffer();
             createIndexBuffer();
@@ -105,8 +107,8 @@ namespace vg
 
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_modelMatrixBufferInfo.m_Buffer), m_modelMatrixBufferInfo.m_BufferAllocation);*/
 
-            m_context.getDevice().destroyPipeline(m_graphicsPipeline);
-            m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
+            //m_context.getDevice().destroyPipeline(m_graphicsPipeline);
+            //m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
             m_context.getDevice().destroyRenderPass(m_renderpass);
             // cleanup here
         }
@@ -147,33 +149,33 @@ namespace vg
 //            }
         }
 
-        struct Vertex
-        {
-            float X, Y, Z;
-        };
+        //struct Vertex
+        //{
+        //    float X, Y, Z;
+        //};
 
-        std::vector<Vertex> vertices
-        {
-            { -0.5f, -0.5f, 0.0f },
-            { +0.0f, +0.5f, 0.0f },
-            { +0.5f, -0.5f, 0.0f }
-        };
-        std::vector<uint16_t> indices
-        {
-            { 0, 1, 2 }
-        };
+        //std::vector<Vertex> vertices
+        //{
+        //    { -0.5f, -0.5f, 0.0f },
+        //    { +0.0f, +0.5f, 0.0f },
+        //    { +0.5f, -0.5f, 0.0f }
+        //};
+        //std::vector<uint16_t> indices
+        //{
+        //    { 0, 1, 2 }
+        //};
 
         void createVertexBuffer()
         {
-            //m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getVertices(), vk::BufferUsageFlagBits::eVertexBuffer);
-            m_vertexBufferInfo = fillBufferTroughStagedTransfer(vertices, vk::BufferUsageFlagBits::eVertexBuffer);
+            m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getVertices(), vk::BufferUsageFlagBits::eVertexBuffer);
+            //m_vertexBufferInfo = fillBufferTroughStagedTransfer(vertices, vk::BufferUsageFlagBits::eVertexBuffer);
 
         }
 
         void createIndexBuffer()
         {
-            //m_indexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getIndices(), vk::BufferUsageFlagBits::eIndexBuffer);
-            m_indexBufferInfo = fillBufferTroughStagedTransfer(indices, vk::BufferUsageFlagBits::eIndexBuffer);
+            m_indexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getIndices(), vk::BufferUsageFlagBits::eIndexBuffer);
+            //m_indexBufferInfo = fillBufferTroughStagedTransfer(indices, vk::BufferUsageFlagBits::eIndexBuffer);
         }
 
         //void createIndirectDrawBuffer()
@@ -191,85 +193,86 @@ namespace vg
             std::vector<vk::GeometryNV> geometryVec;
 
             //// TUTORIAL TEST CODE START
-            const uint32_t vertexCount = (uint32_t)vertices.size();
-            const VkDeviceSize vertexSize = sizeof(Vertex);
-            const VkDeviceSize vertexBufferSize = vertexCount * vertexSize;
+            //const uint32_t vertexCount = (uint32_t)vertices.size();
+            //const VkDeviceSize vertexSize = sizeof(Vertex);
+            //const VkDeviceSize vertexBufferSize = vertexCount * vertexSize;
 
-            const uint32_t indexCount = (uint32_t)indices.size();
-            const VkDeviceSize indexSize = sizeof(uint16_t);
-            const VkDeviceSize indexBufferSize = indexCount * indexSize;
+            //const uint32_t indexCount = (uint32_t)indices.size();
+            //const VkDeviceSize indexSize = sizeof(uint16_t);
+            //const VkDeviceSize indexBufferSize = indexCount * indexSize;
 
-            VkGeometryNV geometry;
-            geometry.sType = VK_STRUCTURE_TYPE_GEOMETRY_NV;
-            geometry.pNext = nullptr;
-            geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_NV;
-            geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_GEOMETRY_TRIANGLES_NV;
-            geometry.geometry.triangles.pNext = nullptr;
-            geometry.geometry.triangles.vertexData = m_vertexBufferInfo.m_Buffer;
-            geometry.geometry.triangles.vertexOffset = 0;
-            geometry.geometry.triangles.vertexCount = vertexCount;
-            geometry.geometry.triangles.vertexStride = vertexSize;
-            geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-            geometry.geometry.triangles.indexData = m_indexBufferInfo.m_Buffer;
-            geometry.geometry.triangles.indexOffset = 0;
-            geometry.geometry.triangles.indexCount = indexCount;
-            geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT16;
-            geometry.geometry.triangles.transformData = VK_NULL_HANDLE;
-            geometry.geometry.triangles.transformOffset = 0;
-            geometry.geometry.aabbs = { };
-            geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_GEOMETRY_AABB_NV;
-            geometry.flags = 0;
+            //VkGeometryNV geometry;
+            //geometry.sType = VK_STRUCTURE_TYPE_GEOMETRY_NV;
+            //geometry.pNext = nullptr;
+            //geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_NV;
+            //geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_GEOMETRY_TRIANGLES_NV;
+            //geometry.geometry.triangles.pNext = nullptr;
+            //geometry.geometry.triangles.vertexData = m_vertexBufferInfo.m_Buffer;
+            //geometry.geometry.triangles.vertexOffset = 0;
+            //geometry.geometry.triangles.vertexCount = vertexCount;
+            //geometry.geometry.triangles.vertexStride = vertexSize;
+            //geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+            //geometry.geometry.triangles.indexData = m_indexBufferInfo.m_Buffer;
+            //geometry.geometry.triangles.indexOffset = 0;
+            //geometry.geometry.triangles.indexCount = indexCount;
+            //geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT16;
+            //geometry.geometry.triangles.transformData = VK_NULL_HANDLE;
+            //geometry.geometry.triangles.transformOffset = 0;
+            //geometry.geometry.aabbs = { };
+            //geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_GEOMETRY_AABB_NV;
+            //geometry.flags = 0;
 
-            geometryVec.emplace_back(geometry);
+            //geometryVec.emplace_back(geometry);
         
             //// TUTORIAL TEST CODE END
 
 
             //vkCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdBuildAccelerationStructureNV"));
-            //////////// NOTES ///////////////////
-            // Currenty, for simple scenes w/o animation: 1 bottom as, 1 instance, 1 top bvh
-            // Would make sense for, e.g. pica pica: 1 bottom as, N instances (for N workers), 1 top bvh
+
+            // TODO 1 Mesh = 1 BLAS + GeometryInstance w/ ModelMatrix as Transform
+
+            const auto toRowMajor4x3 = [](const glm::mat4& in) { return glm::mat3x4(glm::rowMajor4(in)); };
 
             //std::vector<glm::mat4x3> transforms;
             //for (const auto& modelMatrix : m_scene.getModelMatrices())
-            //    transforms.emplace_back(glm::transpose(modelMatrix));
+            //    transforms.emplace_back(toRowMajor4x3(modelMatrix));
 
             //m_transformBufferInfo = fillBufferTroughStagedTransfer(transforms, vk::BufferUsageFlagBits::eRayTracingNV);
 
-            //// currently: 1 geometry = 1 mesh
-            //size_t i = 0;
-            //uint64_t indexOffset = 0;
-            //for(const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
-            //{
-            //    uint64_t vertexCount = 0;
+            // currently: 1 geometry = 1 mesh
+            size_t c = 0;
+            uint64_t indexOffset = 0;
+            for(const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
+            {
+                uint64_t vertexCount = 0;
 
-            //    //todo check this calculation
-            //    if (i < m_scene.getDrawCommandData().size()-1)
-            //        vertexCount = m_scene.getDrawCommandData().at(i + 1).vertexOffset - meshInfo.vertexOffset;
-            //    else
-            //        vertexCount = m_scene.getVertices().size() - meshInfo.vertexOffset;
+                //todo check this calculation
+                if (c < m_scene.getDrawCommandData().size()-1)
+                    vertexCount = m_scene.getDrawCommandData().at(c + 1).vertexOffset - meshInfo.vertexOffset;
+                else
+                    vertexCount = m_scene.getVertices().size() - meshInfo.vertexOffset;
 
-            //    vk::GeometryTrianglesNV triangles;
-            //    triangles.vertexData = m_vertexBufferInfo.m_Buffer;
-            //    triangles.vertexOffset = meshInfo.vertexOffset * sizeof(VertexPosUvNormal);
-            //    triangles.vertexCount = vertexCount;
-            //    triangles.vertexStride = sizeof(VertexPosUvNormal);
-            //    triangles.vertexFormat = VertexPosUvNormal::getAttributeDescriptions().at(0).format;
-            //    triangles.indexData = m_indexBufferInfo.m_Buffer;
-            //    triangles.indexOffset = indexOffset * sizeof(std::decay_t<decltype(m_scene.getIndices())>::value_type);
-            //    triangles.indexCount = meshInfo.indexCount;
-            //    triangles.indexType = vk::IndexType::eUint32;
-            //    triangles.transformData = m_transformBufferInfo.m_Buffer;
-            //    triangles.transformOffset = i * sizeof(glm::mat4x3);
+                vk::GeometryTrianglesNV triangles;
+                triangles.vertexData = m_vertexBufferInfo.m_Buffer;
+                triangles.vertexOffset = meshInfo.vertexOffset * sizeof(VertexPosUvNormal);
+                triangles.vertexCount = vertexCount;
+                triangles.vertexStride = sizeof(VertexPosUvNormal);
+                triangles.vertexFormat = VertexPosUvNormal::getAttributeDescriptions().at(0).format;
+                triangles.indexData = m_indexBufferInfo.m_Buffer;
+                triangles.indexOffset = indexOffset * sizeof(std::decay_t<decltype(m_scene.getIndices())>::value_type);
+                triangles.indexCount = meshInfo.indexCount;
+                triangles.indexType = vk::IndexType::eUint32;
+                triangles.transformData = nullptr;// m_transformBufferInfo.m_Buffer;
+                triangles.transformOffset = 0;// i * sizeof(glm::mat4x3);
 
-            //    indexOffset += meshInfo.indexCount;
+                indexOffset += meshInfo.indexCount;
 
-            //    vk::GeometryDataNV geoData(triangles, {});
-            //    vk::GeometryNV geom(vk::GeometryTypeNV::eTriangles, geoData, {});
+                vk::GeometryDataNV geoData(triangles, {});
+                vk::GeometryNV geom(vk::GeometryTypeNV::eTriangles, geoData, {});
 
-            //    geometryVec.push_back(geom);
-            //    i++;
-            //}
+                geometryVec.push_back(geom);
+                c++;
+            }
 
             auto createActualAcc = [&]
             (vk::AccelerationStructureTypeNV type, uint32_t geometryCount, vk::GeometryNV* geometries, uint32_t instanceCount) -> ASInfo
@@ -296,7 +299,9 @@ namespace vg
                 return returnInfo;
             };
 
-            m_bottomAS = createActualAcc(vk::AccelerationStructureTypeNV::eBottomLevel, static_cast<uint32_t>(geometryVec.size()), geometryVec.data(), 0);
+            for(auto& geometry : geometryVec)
+                m_bottomASs.push_back(createActualAcc(vk::AccelerationStructureTypeNV::eBottomLevel, 1, &geometry, 0));
+
 
             struct GeometryInstance
             {
@@ -309,27 +314,42 @@ namespace vg
             };
 
 
-            float transform[12] =
-            {
-                1.0f, 0.0f, 0.0f, 0.0f,
-                0.0f, 1.0f, 0.0f, 0.0f,
-                0.0f, 0.0f, 1.0f, 0.0f,
-            };
+            //float transform[12] =
+            //{
+            //    1.0f, 0.0f, 0.0f, 1.0f,
+            //    0.0f, 1.0f, 0.0f, 0.0f,
+            //    0.0f, 0.0f, 1.0f, 0.0f,
+            //};
 
-            GeometryInstance instance = {};
-            //glm::mat4x3 transform(glm::transpose(glm::mat4(1.0f))) ;
-            //memcpy(instance.transform, glm::value_ptr(transform), sizeof(instance.transform));
-            memcpy(instance.transform, transform, sizeof(instance.transform));
-            instance.instanceId = 0;
-            instance.mask = 0xff;
-            instance.instanceOffset = 0;
-            instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_CULL_DISABLE_BIT_NV;
-            const auto res = m_context.getDevice().getAccelerationStructureHandleNV(m_bottomAS.m_AS, sizeof(uint64_t), &instance.accelerationStructureHandle);
-            if (res != vk::Result::eSuccess) throw std::runtime_error("AS Handle could not be retrieved");
+            std::vector<GeometryInstance> instances;
+
+            int count = 0;
+            for (const auto& modelMatrix : m_scene.getModelMatrices())
+            {
+                GeometryInstance instance = {};
+                //glm::mat4x3 transform(glm::transpose(glm::mat4(1.0f))) ;
+                auto transform = toRowMajor4x3(modelMatrix);
+                memcpy(instance.transform, glm::value_ptr(transform), sizeof(instance.transform));
+                //memcpy(instance.transform, transform, sizeof(instance.transform));
+                instance.instanceId = count;
+                instance.mask = 0xff;
+                instance.instanceOffset = 0;
+                instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_CULL_DISABLE_BIT_NV;
+
+                const auto res = m_context.getDevice().getAccelerationStructureHandleNV(m_bottomASs.at(count).m_AS, sizeof(uint64_t), &instance.accelerationStructureHandle);
+                if (res != vk::Result::eSuccess) throw std::runtime_error("AS Handle could not be retrieved");
+
+                instances.push_back(instance);
+                count++;
+            }
+
+
+
+
 
             // todo this buffer is gpu only. maybe change this to make it host visible & coherent like it is in the examples.
             // probaby wont be needed if the instanced is not transformed later on
-            m_instanceBufferInfo = fillBufferTroughStagedTransfer(std::vector<GeometryInstance>{instance}, vk::BufferUsageFlagBits::eRayTracingNV);
+            m_instanceBufferInfo = fillBufferTroughStagedTransfer(instances, vk::BufferUsageFlagBits::eRayTracingNV);
 
 
             m_topAS = createActualAcc(vk::AccelerationStructureTypeNV::eTopLevel, 0, nullptr, 1);
@@ -344,29 +364,38 @@ namespace vg
                 return result;
             };
 
-            VkDeviceSize bottomAccelerationStructureBufferSize = GetScratchBufferSize(m_bottomAS.m_AS);
+            vk::DeviceSize maxBLASSize = 0;
+            for(const auto& blas : m_bottomASs)
+            {
+                maxBLASSize = std::max(GetScratchBufferSize(blas.m_AS), maxBLASSize);
+            }
+
+            //VkDeviceSize bottomAccelerationStructureBufferSize = GetScratchBufferSize(m_bottomAS.m_AS);
             VkDeviceSize topAccelerationStructureBufferSize = GetScratchBufferSize(m_topAS.m_AS);
-            VkDeviceSize scratchBufferSize = std::max(bottomAccelerationStructureBufferSize, topAccelerationStructureBufferSize);
+            VkDeviceSize scratchBufferSize = std::max(maxBLASSize, topAccelerationStructureBufferSize);
 
             m_scratchBuffer = createBuffer(scratchBufferSize, vk::BufferUsageFlagBits::eRayTracingNV, VMA_MEMORY_USAGE_GPU_ONLY);
 
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
 #undef MemoryBarrier
-            vk::MemoryBarrier memoryBarrier(
-                vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV,
-                vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV
-            );
+            vk::MemoryBarrier memoryBarrier({}, {});
+            //    vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV,
+            //    vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV
+            //);
 #define MemoryBarrier __faststorefence
 
             //todo remove this when the SDK update happened
             auto OwnCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdBuildAccelerationStructureNV"));
 
-            vk::AccelerationStructureInfoNV asInfoBot(vk::AccelerationStructureTypeNV::eBottomLevel, {}, 0, geometryVec.size(), geometryVec.data());
-            OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoBot), nullptr, 0, VK_FALSE, m_bottomAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
-            //cmdBuf.buildAccelerationStructureNV(asInfoBot, nullptr, 0, VK_FALSE, m_bottomAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
-            cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, {}, memoryBarrier, nullptr, nullptr);
+            for(int i = 0; i < geometryVec.size(); i++)
+            {
+                vk::AccelerationStructureInfoNV asInfoBot(vk::AccelerationStructureTypeNV::eBottomLevel, {}, 0, 1, &geometryVec.at(i));
+                OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoBot), nullptr, 0, VK_FALSE, m_bottomASs.at(i).m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
+                //cmdBuf.buildAccelerationStructureNV(asInfoBot, nullptr, 0, VK_FALSE, m_bottomAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
+                cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, {}, memoryBarrier, nullptr, nullptr);
+            }
 
-            vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, {}, 1, 0, nullptr);
+            vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, {}, instances.size(), 0, nullptr);
             OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoTop), m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             //cmdBuf.buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
@@ -442,7 +471,11 @@ namespace vg
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main"),
             };
 
-            vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, 1, &m_rayTracingDescriptorSetLayout, 0, nullptr);
+            std::array<vk::PushConstantRange, 1> vpcr = {
+                vk::PushConstantRange{vk::ShaderStageFlagBits::eRaygenNV, 0, 2 * sizeof(glm::mat4)},
+            };
+
+            vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, 1, &m_rayTracingDescriptorSetLayout, vpcr.size(), vpcr.data());
 
             m_rayTracingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutCreateInfo);
 
@@ -527,6 +560,8 @@ namespace vg
                 m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipeline);
                 m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipelineLayout, 0, 1, &m_rayTracingDescriptorSets.at(i), 0, nullptr);
 
+                m_commandBuffers.at(i).pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+                m_commandBuffers.at(i).pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
 
                 //m_commandBuffers.at(i).traceRaysNV(
                 auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
@@ -551,17 +586,17 @@ namespace vg
             }
         }
 
-        void createPerFrameInformation() override
+        void createPerFrameInformation()
         {
-            //m_camera = Pilotview(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height);
-            //m_camera.setSensitivity(0.01f);
-            //m_projection = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10000.0f);
-            //m_projection[1][1] *= -1;
+            m_camera = Pilotview(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height);
+            m_camera.setSensitivity(0.01f);
+            m_projection = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10000.0f);
+            m_projection[1][1] *= -1;
 
-            //auto cmdBuf = beginSingleTimeCommands(m_commandPool);
-            //cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-            //cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
-            //endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+            cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+            cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
+            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
 
         }
 
@@ -664,8 +699,8 @@ namespace vg
 
             m_context.getDevice().freeCommandBuffers(m_commandPool, m_commandBuffers);
 
-            m_context.getDevice().destroyPipeline(m_graphicsPipeline);
-            m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
+            //m_context.getDevice().destroyPipeline(m_graphicsPipeline);
+            //m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
             m_context.getDevice().destroyRenderPass(m_renderpass);
 
             for (auto& sciv : m_context.getSwapChainImageViews())
@@ -849,22 +884,22 @@ namespace vg
 
         void updatePerFrameInformation(uint32_t currentImage) override
         {
-            //auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
 
-            //m_camera.update(m_context.getWindow());
-            //if(m_camera.hasChanged())
-            //{
-            //    cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-            //    m_camera.resetChangeFlag();
-            //}
+            m_camera.update(m_context.getWindow());
+            if(m_camera.hasChanged())
+            {
+                cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+                m_camera.resetChangeFlag();
+            }
 
-            //if(m_projectionChanged)
-            //{
-            //    cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
-            //    m_projectionChanged = false;
-            //}
+            if(m_projectionChanged)
+            {
+                cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
+                m_projectionChanged = false;
+            }
 
-            //endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
         }
 
         void configureImgui()
@@ -930,10 +965,10 @@ namespace vg
         }
 
     private:
-        vk::DescriptorSetLayout m_descriptorSetLayout;
+        //vk::DescriptorSetLayout m_descriptorSetLayout;
 
-        vk::PipelineLayout m_pipelineLayout;
-        vk::Pipeline m_graphicsPipeline;
+        //vk::PipelineLayout m_pipelineLayout;
+        //vk::Pipeline m_graphicsPipeline;
 
 
         BufferInfo m_vertexBufferInfo;
@@ -950,16 +985,16 @@ namespace vg
         std::vector<vk::Sampler> m_allImageSamplers;
 
         Pilotview m_camera;
-        //glm::mat4 m_projection;
-        //bool m_projectionChanged;
+        glm::mat4 m_projection;
+        bool m_projectionChanged;
 
-        //Scene m_scene;
+        Scene m_scene;
 
         Timer m_timer;
 
         // RT stuff
-        BufferInfo m_transformBufferInfo;
-        ASInfo m_bottomAS;
+        //BufferInfo m_transformBufferInfo;
+        std::vector<ASInfo> m_bottomASs;
         BufferInfo m_instanceBufferInfo;
         ASInfo m_topAS;
         BufferInfo m_scratchBuffer;

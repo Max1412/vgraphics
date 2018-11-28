@@ -165,13 +165,14 @@ namespace vg
             m_modelMatrixBufferInfo = fillBufferTroughStagedTransfer(m_scene.getModelMatrices(), vk::BufferUsageFlagBits::eStorageBuffer);
         }
 
-        void createPerFrameInformation() override
+        void createPerFrameInformation()
         {
             m_camera = Pilotview(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height);
             m_camera.setSensitivity(0.01f);
             m_projection = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10000.0f);
             m_projection[1][1] *= -1;
 
+            m_camera.update(m_context.getWindow());
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
             cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
             cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
@@ -451,6 +452,9 @@ namespace vg
 
                 m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(0), 0, nullptr);
 
+                m_commandBuffers.at(i).pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+                m_commandBuffers.at(i).pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
+
                 m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()),
                     sizeof(std::decay_t<decltype(*m_scene.getDrawCommandData().data())>));
 
@@ -465,12 +469,12 @@ namespace vg
         {
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
 
-            m_camera.update(m_context.getWindow());
-            if(m_camera.hasChanged())
-            {
-                cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-                m_camera.resetChangeFlag();
-            }
+            //m_camera.update(m_context.getWindow());
+            //if(m_camera.hasChanged())
+            //{
+            //    cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+            //    m_camera.resetChangeFlag();
+            //}
 
             if(m_projectionChanged)
             {
