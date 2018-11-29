@@ -44,8 +44,9 @@ namespace vg
         virtual void recreateSwapChain() = 0;
 
         // todo maybe make this more generic e.g. "update per-frame information"
-        virtual void updatePerFrameInformation(uint32_t) = 0;
+        //virtual void updatePerFrameInformation(uint32_t) = 0;
         //virtual void createPerFrameInformation() = 0;
+        virtual void recordPerFrameCommandBuffers(uint32_t currentImage) = 0;
 
         virtual void buildImguiCmdBufferAndSubmit(const uint32_t imageIndex)
         {
@@ -112,6 +113,8 @@ namespace vg
         int m_currentFrame = 0;
 
         std::vector<vk::CommandBuffer> m_commandBuffers;
+        std::vector<vk::CommandBuffer> m_staticSecondaryCommandBuffers;
+        std::vector<vk::CommandBuffer> m_perFrameSecondaryCommandBuffers;
         std::vector<vk::CommandBuffer> m_imguiCommandBuffers;
 
 

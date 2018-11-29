@@ -136,8 +136,7 @@ namespace vg
         vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
         vk::Semaphore signalSemaphores[] = { m_graphicsRenderFinishedSemaphores.at(m_currentFrame) };
 
-        // todo maybe make this more generic e.g. "update per-frame information"
-        updatePerFrameInformation(imageIndex);
+        recordPerFrameCommandBuffers(imageIndex);
 
         vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
 

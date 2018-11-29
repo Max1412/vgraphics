@@ -56,7 +56,7 @@ namespace vg
             createDescriptorPool();
             createDescriptorSets();
 
-            createCommandBuffers();
+            createAllCommandBuffers();
             createSyncObjects();
 
             createQueryPool();
@@ -173,10 +173,6 @@ namespace vg
             m_projection[1][1] *= -1;
 
             m_camera.update(m_context.getWindow());
-            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
-            cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-            cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
-            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
 
         }
 
@@ -264,7 +260,7 @@ namespace vg
             createGraphicsPipeline();
             createDepthResources();
             createFramebuffers();
-            createCommandBuffers();
+            createAllCommandBuffers();
         }
 
         // base
@@ -424,65 +420,85 @@ namespace vg
 
         }
 
-        void createCommandBuffers()
+        void createAllCommandBuffers()
         {
+            // primary buffers, needs to be re-recorded every frame
             vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
-
             m_commandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
 
-            for (size_t i = 0; i < m_commandBuffers.size(); i++)
+            // static secondary buffers (containing draw calls), never change
+            vk::CommandBufferAllocateInfo secondaryCmdAllocInfo(m_commandPool, vk::CommandBufferLevel::eSecondary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
+            m_staticSecondaryCommandBuffers = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
+
+            // dynamic secondary buffers (containing per-frame information), getting re-recorded if necessary
+            m_perFrameSecondaryCommandBuffers = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
+
+            // fill static command buffers:
+            for (size_t i = 0; i < m_staticSecondaryCommandBuffers.size(); i++)
             {
-                vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+                vk::CommandBufferInheritanceInfo inheritanceInfo(m_renderpass, 0, m_swapChainFramebuffers.at(i), 0, {}, {});
+                vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse | vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritanceInfo);
+                m_staticSecondaryCommandBuffers.at(i).begin(beginInfo);
 
-                // begin recording
-                m_commandBuffers.at(i).begin(beginInfo);
 
-                std::array<vk::ClearValue, 2> clearColors = { vk::ClearValue{std::array<float, 4>{ 0.1f, 0.1f, 0.1f, 1.0f }}, vk::ClearDepthStencilValue{1.0f, 0} };
-                vk::RenderPassBeginInfo renderpassInfo(m_renderpass, m_swapChainFramebuffers.at(i), { {0, 0}, m_context.getSwapChainExtent() }, static_cast<uint32_t>(clearColors.size()), clearColors.data());
+                m_staticSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
-                /////////////////////////////
-                // actual commands start here
-                /////////////////////////////
-                m_commandBuffers.at(i).beginRenderPass(renderpassInfo, vk::SubpassContents::eInline);
+                m_staticSecondaryCommandBuffers.at(i).bindVertexBuffers(0, m_vertexBufferInfo.m_Buffer, 0ull);
+                m_staticSecondaryCommandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint32);
 
-                m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
+                m_staticSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(0), 0, nullptr);
 
-                m_commandBuffers.at(i).bindVertexBuffers(0, m_vertexBufferInfo.m_Buffer, 0ull);
-                m_commandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint32);
-
-                m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0, 1, &m_descriptorSets.at(0), 0, nullptr);
-
-                m_commandBuffers.at(i).pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-                m_commandBuffers.at(i).pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
-
-                m_commandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()),
+                m_staticSecondaryCommandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()),
                     sizeof(std::decay_t<decltype(*m_scene.getDrawCommandData().data())>));
 
-                m_commandBuffers.at(i).endRenderPass();
 
-                // stop recording
-                m_commandBuffers.at(i).end();
+                m_staticSecondaryCommandBuffers.at(i).end();
             }
         }
 
-        void updatePerFrameInformation(uint32_t currentImage) override
+        void recordPerFrameCommandBuffers(uint32_t currentImage) override
         {
-            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+            ////// Secondary Command Buffer with per-frame information (TODO: this can be done in a seperate thread)
+            m_perFrameSecondaryCommandBuffers.at(currentImage).reset({});
 
-            //m_camera.update(m_context.getWindow());
-            //if(m_camera.hasChanged())
-            //{
-            //    cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-            //    m_camera.resetChangeFlag();
-            //}
+            vk::CommandBufferInheritanceInfo inheritanceInfo(m_renderpass, 0, m_swapChainFramebuffers.at(currentImage), 0, {}, {});
+            vk::CommandBufferBeginInfo beginInfo1(vk::CommandBufferUsageFlagBits::eSimultaneousUse | vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritanceInfo);
 
-            if(m_projectionChanged)
+            m_perFrameSecondaryCommandBuffers.at(currentImage).begin(beginInfo1);
+
+            m_camera.update(m_context.getWindow());
+            if(m_camera.hasChanged()) // this is currently always true
             {
-                cmdBuf.pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
+                m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+                m_camera.resetChangeFlag();
+            }
+            if (m_projectionChanged)
+            {
+                m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_pipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
                 m_projectionChanged = false;
             }
 
-            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+            m_perFrameSecondaryCommandBuffers.at(currentImage).end();
+
+
+            ////// Primary Command Buffer (doesn't really change, but still needs to be re-recorded)
+            m_commandBuffers.at(currentImage).reset({});
+
+            vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+            m_commandBuffers.at(currentImage).begin(beginInfo);
+
+            std::array<vk::ClearValue, 2> clearColors = { vk::ClearValue{std::array<float, 4>{ 0.1f, 0.1f, 0.1f, 1.0f }}, vk::ClearDepthStencilValue{1.0f, 0} };
+            vk::RenderPassBeginInfo renderpassInfo(m_renderpass, m_swapChainFramebuffers.at(currentImage), { {0, 0}, m_context.getSwapChainExtent() }, static_cast<uint32_t>(clearColors.size()), clearColors.data());
+            m_commandBuffers.at(currentImage).beginRenderPass(renderpassInfo, vk::SubpassContents::eSecondaryCommandBuffers);
+
+            // execute command buffer which updates per-frame information
+            m_commandBuffers.at(currentImage).executeCommands(m_perFrameSecondaryCommandBuffers.at(currentImage));
+
+            // execute command buffers which contains rendering commands
+            m_commandBuffers.at(currentImage).executeCommands(m_staticSecondaryCommandBuffers.at(currentImage));
+
+            m_commandBuffers.at(currentImage).endRenderPass();
+            m_commandBuffers.at(currentImage).end();
         }
 
         void configureImgui()

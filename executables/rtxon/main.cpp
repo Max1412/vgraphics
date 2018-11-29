@@ -547,43 +547,13 @@ namespace vg
             vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
             m_commandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
 
-            for (size_t i = 0; i < m_commandBuffers.size(); i++)
-            {
-                vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+            //// static secondary buffers (containing draw calls), never change
+            //vk::CommandBufferAllocateInfo secondaryCmdAllocInfo(m_commandPool, vk::CommandBufferLevel::eSecondary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
+            //m_staticSecondaryCommandBuffers = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
 
-                // begin recording
-                m_commandBuffers.at(i).begin(beginInfo);
+            //// dynamic secondary buffers (containing per-frame information), getting re-recorded if necessary
+            //m_perFrameSecondaryCommandBuffers = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
 
-                // transition image to make it accessible by imageStore
-                transitionInCmdBuf(m_context.getSwapChainImages().at(i), m_context.getSwapChainImageFormat(), vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, 1, m_commandBuffers.at(i));
-
-                m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipeline);
-                m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipelineLayout, 0, 1, &m_rayTracingDescriptorSets.at(i), 0, nullptr);
-
-                m_commandBuffers.at(i).pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-                m_commandBuffers.at(i).pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
-
-                //m_commandBuffers.at(i).traceRaysNV(
-                auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
-                OwnCmdTraceRays(m_commandBuffers.at(i),
-                    m_sbtInfo.m_Buffer, 0, // raygen
-                    m_sbtInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
-                    m_sbtInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // hit
-                    nullptr, 0, 0, // callable
-                    m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
-                );
-
-                //m_commandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eCompute, m_computePipeline);
-                //m_commandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_computePipelineLayout, 0, 1, &m_computeDescriptorSets.at(i), 0, nullptr);
-
-                //m_commandBuffers.at(i).dispatch(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1);
-
-                // transition image for to use it for imgui
-                transitionInCmdBuf(m_context.getSwapChainImages().at(i), m_context.getSwapChainImageFormat(), vk::ImageLayout::eGeneral, vk::ImageLayout::eColorAttachmentOptimal, 1, m_commandBuffers.at(i));
-
-                // stop recording
-                m_commandBuffers.at(i).end();
-            }
         }
 
         void createPerFrameInformation()
@@ -593,10 +563,44 @@ namespace vg
             m_projection = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10000.0f);
             m_projection[1][1] *= -1;
 
-            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
-            cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-            cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
-            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+            m_camera.update(m_context.getWindow());
+
+        }
+
+        void recordPerFrameCommandBuffers(uint32_t currentImage) override
+        {
+            ////// Secondary Command Buffer with per-frame information (TODO: this can be done in a seperate thread)
+            m_commandBuffers.at(currentImage).reset({});
+
+            vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
+            m_commandBuffers.at(currentImage).begin(beginInfo);
+
+
+            // transition image to make it accessible by imageStore
+            transitionInCmdBuf(m_context.getSwapChainImages().at(currentImage), m_context.getSwapChainImageFormat(), vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, 1, m_commandBuffers.at(currentImage));
+
+            m_commandBuffers.at(currentImage).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipeline);
+            m_commandBuffers.at(currentImage).bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipelineLayout, 0, 1, &m_rayTracingDescriptorSets.at(currentImage), 0, nullptr);
+
+            m_camera.update(m_context.getWindow());
+            m_commandBuffers.at(currentImage).pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+            m_commandBuffers.at(currentImage).pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
+
+            //m_commandBuffers.at(i).traceRaysNV(
+            auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
+            OwnCmdTraceRays(m_commandBuffers.at(currentImage),
+                m_sbtInfo.m_Buffer, 0, // raygen
+                m_sbtInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+                m_sbtInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // hit
+                nullptr, 0, 0, // callable
+                m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
+            );
+
+
+            // transition image for to use it for imgui
+            transitionInCmdBuf(m_context.getSwapChainImages().at(currentImage), m_context.getSwapChainImageFormat(), vk::ImageLayout::eGeneral, vk::ImageLayout::eColorAttachmentOptimal, 1, m_commandBuffers.at(currentImage));
+
+            m_commandBuffers.at(currentImage).end();
 
         }
 
@@ -882,25 +886,25 @@ namespace vg
         //    }
         //}
 
-        void updatePerFrameInformation(uint32_t currentImage) override
-        {
-            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+        //void updatePerFrameInformation(uint32_t currentImage) override
+        //{
+        //    auto cmdBuf = beginSingleTimeCommands(m_commandPool);
 
-            m_camera.update(m_context.getWindow());
-            if(m_camera.hasChanged())
-            {
-                cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-                m_camera.resetChangeFlag();
-            }
+        //    m_camera.update(m_context.getWindow());
+        //    if(m_camera.hasChanged())
+        //    {
+        //        cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
+        //        m_camera.resetChangeFlag();
+        //    }
 
-            if(m_projectionChanged)
-            {
-                cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
-                m_projectionChanged = false;
-            }
+        //    if(m_projectionChanged)
+        //    {
+        //        cmdBuf.pushConstants(m_rayTracingPipelineLayout, vk::ShaderStageFlagBits::eRaygenNV, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
+        //        m_projectionChanged = false;
+        //    }
 
-            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
-        }
+        //    endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+        //}
 
         void configureImgui()
         {
