@@ -35,7 +35,7 @@ namespace vg
     public:
         MultiApp() : BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
 			m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
-			m_scene("bunnyPlane/bunnyPlane.obj")
+			m_scene("salle_de_bain/salle_de_bain.obj")
         {
             createRenderPass();
             //createDescriptorSetLayout();
@@ -46,7 +46,7 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            createSceneInformation("bunnyPlane/");
+            createSceneInformation("salle_de_bain/");
 
             createVertexBuffer();
             createIndexBuffer();
@@ -115,38 +115,38 @@ namespace vg
 
         void createSceneInformation(const char * foldername)
         {
-//            // load all images
-//            std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedTexturePaths().size());
-//            stbi_set_flip_vertically_on_load(true);
-//
-//#pragma omp parallel for
-//            for (int i = 0; i < m_scene.getIndexedTexturePaths().size(); i++)
-//            {
-//                auto path = g_resourcesPath;
-//                const auto name = std::string(std::string(foldername) + m_scene.getIndexedTexturePaths().at(i).second);
-//                path.append(name);
-//                loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
-//                loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
-//            }
-//
-//            for (const auto& ili : loadedImages)
-//            {
-//                // load image, fill resource, create mipmaps
-//                const auto imageInfo = createTextureImageFromLoaded(ili);
-//                m_allImages.push_back(imageInfo);
-//
-//                // create view for image
-//                vk::ImageViewCreateInfo viewInfo({}, imageInfo.m_Image, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, { vk::ImageAspectFlagBits::eColor, 0, imageInfo.mipLevels, 0, 1 });
-//                m_allImageViews.push_back(m_context.getDevice().createImageView(viewInfo));
-//
-//                vk::SamplerCreateInfo samplerInfo({},
-//                    vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
-//                    vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
-//                    0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f, static_cast<float>(imageInfo.mipLevels), vk::BorderColor::eIntOpaqueBlack, VK_FALSE
-//                );
-//                m_allImageSamplers.push_back(m_context.getDevice().createSampler(samplerInfo));
-//
-//            }
+            // load all images
+            std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedTexturePaths().size());
+            stbi_set_flip_vertically_on_load(true);
+
+#pragma omp parallel for
+            for (int i = 0; i < m_scene.getIndexedTexturePaths().size(); i++)
+            {
+                auto path = g_resourcesPath;
+                const auto name = std::string(std::string(foldername) + m_scene.getIndexedTexturePaths().at(i).second);
+                path.append(name);
+                loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
+                loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
+            }
+
+            for (const auto& ili : loadedImages)
+            {
+                // load image, fill resource, create mipmaps
+                const auto imageInfo = createTextureImageFromLoaded(ili);
+                m_allImages.push_back(imageInfo);
+
+                // create view for image
+                vk::ImageViewCreateInfo viewInfo({}, imageInfo.m_Image, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, { vk::ImageAspectFlagBits::eColor, 0, imageInfo.mipLevels, 0, 1 });
+                m_allImageViews.push_back(m_context.getDevice().createImageView(viewInfo));
+
+                vk::SamplerCreateInfo samplerInfo({},
+                    vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
+                    vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
+                    0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f, static_cast<float>(imageInfo.mipLevels), vk::BorderColor::eIntOpaqueBlack, VK_FALSE
+                );
+                m_allImageSamplers.push_back(m_context.getDevice().createSampler(samplerInfo));
+
+            }
         }
 
         //struct Vertex
@@ -167,14 +167,14 @@ namespace vg
 
         void createVertexBuffer()
         {
-            m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getVertices(), vk::BufferUsageFlagBits::eVertexBuffer);
+            m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getVertices(), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer);
             //m_vertexBufferInfo = fillBufferTroughStagedTransfer(vertices, vk::BufferUsageFlagBits::eVertexBuffer);
 
         }
 
         void createIndexBuffer()
         {
-            m_indexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getIndices(), vk::BufferUsageFlagBits::eIndexBuffer);
+            m_indexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getIndices(), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eStorageBuffer);
             //m_indexBufferInfo = fillBufferTroughStagedTransfer(indices, vk::BufferUsageFlagBits::eIndexBuffer);
         }
 
@@ -190,44 +190,30 @@ namespace vg
 
         void createAccelerationStructure()
         {
+            //// Helper Buffers for Ray Tracing
+
+            // Offset Buffer
+
+            struct OffsetInfo
+            {
+                int m_vbOffset = 0;
+                int m_ibOffset = 0;
+                int m_diffTextureID = -1;
+                int m_specTextureID = -1;
+            };
+
+            std::vector<OffsetInfo> offsetInfos;
+            int32_t indexOffset0 = 0;
+            int j = 0;
+            for(const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
+            {
+                offsetInfos.push_back(OffsetInfo{ meshInfo.vertexOffset, indexOffset0, meshInfo.texIndex, -1 });
+                indexOffset0 += meshInfo.indexCount;
+                j++;
+            }
+            m_offsetBufferInfo = fillBufferTroughStagedTransfer(offsetInfos, vk::BufferUsageFlagBits::eStorageBuffer);
+
             std::vector<vk::GeometryNV> geometryVec;
-
-            //// TUTORIAL TEST CODE START
-            //const uint32_t vertexCount = (uint32_t)vertices.size();
-            //const VkDeviceSize vertexSize = sizeof(Vertex);
-            //const VkDeviceSize vertexBufferSize = vertexCount * vertexSize;
-
-            //const uint32_t indexCount = (uint32_t)indices.size();
-            //const VkDeviceSize indexSize = sizeof(uint16_t);
-            //const VkDeviceSize indexBufferSize = indexCount * indexSize;
-
-            //VkGeometryNV geometry;
-            //geometry.sType = VK_STRUCTURE_TYPE_GEOMETRY_NV;
-            //geometry.pNext = nullptr;
-            //geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_NV;
-            //geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_GEOMETRY_TRIANGLES_NV;
-            //geometry.geometry.triangles.pNext = nullptr;
-            //geometry.geometry.triangles.vertexData = m_vertexBufferInfo.m_Buffer;
-            //geometry.geometry.triangles.vertexOffset = 0;
-            //geometry.geometry.triangles.vertexCount = vertexCount;
-            //geometry.geometry.triangles.vertexStride = vertexSize;
-            //geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-            //geometry.geometry.triangles.indexData = m_indexBufferInfo.m_Buffer;
-            //geometry.geometry.triangles.indexOffset = 0;
-            //geometry.geometry.triangles.indexCount = indexCount;
-            //geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT16;
-            //geometry.geometry.triangles.transformData = VK_NULL_HANDLE;
-            //geometry.geometry.triangles.transformOffset = 0;
-            //geometry.geometry.aabbs = { };
-            //geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_GEOMETRY_AABB_NV;
-            //geometry.flags = 0;
-
-            //geometryVec.emplace_back(geometry);
-        
-            //// TUTORIAL TEST CODE END
-
-
-            //vkCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdBuildAccelerationStructureNV"));
 
             // TODO 1 Mesh = 1 BLAS + GeometryInstance w/ ModelMatrix as Transform
 
@@ -405,50 +391,22 @@ namespace vg
 
         void createRTPipeline()
         {
-            //// Debugging: Compute Pipeline
-
-            //vk::DescriptorSetLayoutBinding oiLB1(0, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eCompute, nullptr);
-            //std::array<vk::DescriptorSetLayoutBinding, 1> bindings1 = { oiLB1 };
-            //vk::DescriptorSetLayoutCreateInfo layoutInfo1({}, bindings1.size(), bindings1.data());
-            //m_computeDescriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo1);
-            //const auto compShaderCode = Utility::readFile("rtxon/shader.comp.spv");
-            //const auto compShaderModule = m_context.createShaderModule(compShaderCode);
-            //const vk::PipelineShaderStageCreateInfo compShaderStageInfo({}, vk::ShaderStageFlagBits::eCompute, compShaderModule, "main");
-            //vk::PipelineLayoutCreateInfo compPipelineLayoutCreateInfo({}, 1, &m_computeDescriptorSetLayout, 0, nullptr);
-            //m_computePipelineLayout = m_context.getDevice().createPipelineLayout(compPipelineLayoutCreateInfo);
-
-            //vk::ComputePipelineCreateInfo compPipelineInfo({}, compShaderStageInfo, m_computePipelineLayout, nullptr, 0);
-            //m_computePipeline = m_context.getDevice().createComputePipelines(nullptr, compPipelineInfo).at(0);
-
-            //std::array<vk::DescriptorPoolSize, 1> poolSizes = { 
-            //    vk::DescriptorPoolSize{vk::DescriptorType::eStorageImage, 1},
-            //};
-
-            //vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo({}, m_swapChainFramebuffers.size(), poolSizes.size(), poolSizes.data());
-            //m_computeDescriptorPool = m_context.getDevice().createDescriptorPool(descriptorPoolCreateInfo);
-
-            //// create n descriptor sets
-            //std::vector<vk::DescriptorSetLayout> dsls(m_swapChainFramebuffers.size(), m_computeDescriptorSetLayout);
-            //vk::DescriptorSetAllocateInfo desSetAllocInfo(m_computeDescriptorPool, m_swapChainFramebuffers.size(), dsls.data());
-            //m_computeDescriptorSets = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo);
- 
-            //for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
-            //{
-            //    // the tutorial always writes to the same image. Here, multiple descriptor sets each corresponding to a swapchain image are created
-            //    vk::DescriptorImageInfo descriptorOutputImageInfo(nullptr, m_context.getSwapChainImageViews().at(i), vk::ImageLayout::eGeneral); // maybe layout colorAttachment?
-            //    vk::WriteDescriptorSet outputImageWrite(m_computeDescriptorSets.at(i), 0, 0, 1, vk::DescriptorType::eStorageImage, &descriptorOutputImageInfo, nullptr, nullptr);
-            //    std::array<vk::WriteDescriptorSet, 1> descriptorWrites = { outputImageWrite };
-            //    m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
-            //}
-
             //// 1. DSL
 
             // AS
             vk::DescriptorSetLayoutBinding asLB(0, vk::DescriptorType::eAccelerationStructureNV, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
             // Image Load/Store for output
             vk::DescriptorSetLayoutBinding oiLB(1, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+            // texture array
+            vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, m_scene.getIndexedTexturePaths().size(), vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 
-            std::array<vk::DescriptorSetLayoutBinding, 2> bindings = { asLB, oiLB };
+            // buffers
+            vk::DescriptorSetLayoutBinding vertexBufferLB(3, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+            vk::DescriptorSetLayoutBinding indexBufferLB(4, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+            vk::DescriptorSetLayoutBinding offsetBufferLB(5, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+
+
+            std::array<vk::DescriptorSetLayoutBinding, 6> bindings = { asLB, oiLB, allTexturesLayoutBinding, vertexBufferLB, indexBufferLB, offsetBufferLB };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, bindings.size(), bindings.data());
 
@@ -465,9 +423,14 @@ namespace vg
             const auto missShaderCode = Utility::readFile("rtxon/rt_06_shaders.rmiss.spv");
             const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
+            // specialization constant for the number of textures
+            vk::SpecializationMapEntry mapEntry(0, 0, sizeof(int32_t));
+            int32_t numTextures = static_cast<int32_t>(m_scene.getIndexedTexturePaths().size());
+            vk::SpecializationInfo numTexturesSpecInfo(1, &mapEntry, sizeof(int32_t), &numTextures);
+
             const std::array<vk::PipelineShaderStageCreateInfo, 3> rtShaderStageInfos = {
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
-                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
+                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main", &numTexturesSpecInfo),
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main"),
             };
 
@@ -515,9 +478,12 @@ namespace vg
             // deviation from tutorial: I'm creating multiple descriptor sets, and binding the one with the current swap chain image
 
             //todo delete this pool, use the other existing one instead (?)
-            std::array<vk::DescriptorPoolSize, 2> poolSizes = { 
+            std::array<vk::DescriptorPoolSize, 4> poolSizes = { 
                 vk::DescriptorPoolSize{vk::DescriptorType::eStorageImage, 1},
-                vk::DescriptorPoolSize{vk::DescriptorType::eAccelerationStructureNV, 1}
+                vk::DescriptorPoolSize{vk::DescriptorType::eAccelerationStructureNV, 1},
+                vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 4096),
+                vk::DescriptorPoolSize{vk::DescriptorType::eStorageBuffer, 3}
+
             };
 
             vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo({}, m_swapChainFramebuffers.size(), poolSizes.size(), poolSizes.data());
@@ -528,6 +494,13 @@ namespace vg
             vk::DescriptorSetAllocateInfo desSetAllocInfo(m_rayTracingDescriptorPool, m_swapChainFramebuffers.size(), dsls.data());
             m_rayTracingDescriptorSets = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo);
 
+
+            std::vector<vk::DescriptorImageInfo> allImageInfos;
+            for (int i = 0; i < m_allImages.size(); i++)
+            {
+                allImageInfos.emplace_back(m_allImageSamplers.at(i), m_allImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
+            }
+
             for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
             {
                 vk::WriteDescriptorSetAccelerationStructureNV descriptorSetAccelerationStructureInfo(1, &m_topAS.m_AS);
@@ -537,7 +510,17 @@ namespace vg
                 // the tutorial always writes to the same image. Here, multiple descriptor sets each corresponding to a swapchain image are created
                 vk::DescriptorImageInfo descriptorOutputImageInfo(nullptr, m_context.getSwapChainImageViews().at(i), vk::ImageLayout::eGeneral); // maybe layout colorAttachment?
                 vk::WriteDescriptorSet outputImageWrite(m_rayTracingDescriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eStorageImage, &descriptorOutputImageInfo, nullptr, nullptr);
-                std::array<vk::WriteDescriptorSet, 2> descriptorWrites = { accelerationStructureWrite, outputImageWrite };
+
+                vk::WriteDescriptorSet descWriteAllImages(m_rayTracingDescriptorSets.at(i), 2, 0, m_allImages.size(), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
+
+                vk::DescriptorBufferInfo vbInfo(m_vertexBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
+                vk::WriteDescriptorSet descWriteVertexBuffer(m_rayTracingDescriptorSets.at(i), 3, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &vbInfo, nullptr);
+                vk::DescriptorBufferInfo ibInfo(m_indexBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
+                vk::WriteDescriptorSet descWriteIndexBuffer(m_rayTracingDescriptorSets.at(i), 4, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &ibInfo, nullptr);
+                vk::DescriptorBufferInfo obInfo(m_offsetBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
+                vk::WriteDescriptorSet descWriteOffsetBuffer(m_rayTracingDescriptorSets.at(i), 5, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &obInfo, nullptr);
+
+                std::array<vk::WriteDescriptorSet, 6> descriptorWrites = { accelerationStructureWrite, outputImageWrite, descWriteAllImages, descWriteVertexBuffer, descWriteIndexBuffer, descWriteOffsetBuffer };
                 m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
             }
         }
@@ -977,6 +960,10 @@ namespace vg
 
         BufferInfo m_vertexBufferInfo;
         BufferInfo m_indexBufferInfo;
+
+        BufferInfo m_offsetBufferInfo;
+
+
         //BufferInfo m_indirectDrawBufferInfo;
         //BufferInfo m_modelMatrixBufferInfo;
 

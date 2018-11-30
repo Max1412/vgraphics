@@ -34,7 +34,7 @@ namespace vg
         MultiApp() :
     		BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters" }),
     		m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
-    		m_scene("Exterior/exterior.obj")
+            m_scene("salle_de_bain/salle_de_bain.obj")
         {
             createRenderPass();
             createDescriptorSetLayout();
@@ -45,7 +45,7 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            createSceneInformation("exterior/");
+            createSceneInformation("salle_de_bain/");
 
             createVertexBuffer();
             createIndexBuffer();
