@@ -41,7 +41,7 @@ void main()
     uint rayFlags = gl_RayFlagsOpaqueNV;
     uint cullMask = 0xff;
     float tmin = 0.001;
-    float tmax = 100.0;
+    float tmax = 100000.0;
     traceNV(topLevelAS, rayFlags, cullMask, 0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/, origin, tmin, direction, tmax, 0 /*payload*/);
 
     imageStore(image, ivec2(gl_LaunchIDNV.xy), vec4(hitValue, 0.0));

@@ -13,6 +13,7 @@ namespace vg
         vk::AccelerationStructureNV m_AS = nullptr;
         VmaAllocation m_BufferAllocation = nullptr;
         VmaAllocationInfo m_BufferAllocInfo = {};
+		vk::DeviceMemory memory = nullptr;
     };
 
     struct BufferInfo

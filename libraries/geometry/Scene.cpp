@@ -42,12 +42,13 @@ Scene::Scene(const std::filesystem::path& filename)
         throw std::runtime_error("No meshes found!");
 
     const auto numMeshes = scene->mNumMeshes;
-    m_meshes.reserve(numMeshes);
-    m_modelMatrices = std::vector<glm::mat4>(numMeshes, glm::mat4(1.0f));
+	//m_meshes.reserve(numMeshes - 1);
 
     // process all meshes in the scene
     for (unsigned i = 0; i < numMeshes; i++)
     {
+		//if (i > 270) continue;
+
         PerMeshInfo currentMesh;
         currentMesh.instanceCount = 1;
 
@@ -92,6 +93,8 @@ Scene::Scene(const std::filesystem::path& filename)
         currentMesh.assimpMaterialIndex = scene->mMeshes[i]->mMaterialIndex;
         m_meshes.push_back(currentMesh);
     }
+
+	m_modelMatrices = std::vector<glm::mat4>(m_meshes.size(), glm::mat4(1.0f));
 
     // accumulate all hierarchical transformations to model matrices
     const auto root = scene->mRootNode;

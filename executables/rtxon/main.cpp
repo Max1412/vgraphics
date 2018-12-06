@@ -35,7 +35,7 @@ namespace vg
     public:
         MultiApp() : BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
 			m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
-			m_scene("salle_de_bain/salle_de_bain.obj")
+			m_scene("Interior/interior.obj")
         {
             createRenderPass();
             //createDescriptorSetLayout();
@@ -46,7 +46,7 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            createSceneInformation("salle_de_bain/");
+            createSceneInformation("Interior/");
 
             createVertexBuffer();
             createIndexBuffer();
@@ -209,9 +209,11 @@ namespace vg
             {
                 offsetInfos.push_back(OffsetInfo{ meshInfo.vertexOffset, indexOffset0, meshInfo.texIndex, -1 });
                 indexOffset0 += meshInfo.indexCount;
+
                 j++;
             }
             m_offsetBufferInfo = fillBufferTroughStagedTransfer(offsetInfos, vk::BufferUsageFlagBits::eStorageBuffer);
+			//m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getVertices(), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer);
 
             std::vector<vk::GeometryNV> geometryVec;
 
@@ -230,6 +232,7 @@ namespace vg
             uint64_t indexOffset = 0;
             for(const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
             {
+
                 uint64_t vertexCount = 0;
 
                 //todo check this calculation
@@ -250,11 +253,11 @@ namespace vg
                 triangles.indexType = vk::IndexType::eUint32;
                 triangles.transformData = nullptr;// m_transformBufferInfo.m_Buffer;
                 triangles.transformOffset = 0;// i * sizeof(glm::mat4x3);
-
+				
                 indexOffset += meshInfo.indexCount;
 
                 vk::GeometryDataNV geoData(triangles, {});
-                vk::GeometryNV geom(vk::GeometryTypeNV::eTriangles, geoData, {});
+                vk::GeometryNV geom(vk::GeometryTypeNV::eTriangles, geoData, vk::GeometryFlagBitsNV::eOpaque);
 
                 geometryVec.push_back(geom);
                 c++;
@@ -263,6 +266,22 @@ namespace vg
             auto createActualAcc = [&]
             (vk::AccelerationStructureTypeNV type, uint32_t geometryCount, vk::GeometryNV* geometries, uint32_t instanceCount) -> ASInfo
             {
+				auto findMemoryType = [&](uint32_t typeFilter, VkMemoryPropertyFlags properties) -> uint32_t
+				{
+					VkPhysicalDeviceMemoryProperties memProperties;
+					vkGetPhysicalDeviceMemoryProperties(m_context.getPhysicalDevice(), &memProperties);
+
+					for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+					{
+						if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+						{
+							return i;
+						}
+					}
+
+					throw std::runtime_error("failed to find suitable memory type!");
+				};
+
                 ASInfo returnInfo;
                 vk::AccelerationStructureInfoNV asInfo(type, {}, instanceCount, geometryCount, geometries);
                 vk::AccelerationStructureCreateInfoNV accStrucInfo(0, asInfo);
@@ -273,6 +292,7 @@ namespace vg
 
                 VmaAllocationCreateInfo allocInfo = {};
                 allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+				allocInfo.memoryTypeBits = findMemoryType(memReqs.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
                 vmaAllocateMemory(m_context.getAllocator(),
                     reinterpret_cast<VkMemoryRequirements*>(&memReqs.memoryRequirements), //TODO vma doesn't know about memReq2, does this even work?
                     &allocInfo, &returnInfo.m_BufferAllocation, &returnInfo.m_BufferAllocInfo);
@@ -314,7 +334,7 @@ namespace vg
             {
                 GeometryInstance instance = {};
                 //glm::mat4x3 transform(glm::transpose(glm::mat4(1.0f))) ;
-                auto transform = toRowMajor4x3(modelMatrix);
+				auto transform = toRowMajor4x3(glm::mat4(1.0f));// modelMatrix);
                 memcpy(instance.transform, glm::value_ptr(transform), sizeof(instance.transform));
                 //memcpy(instance.transform, transform, sizeof(instance.transform));
                 instance.instanceId = count;
@@ -364,10 +384,10 @@ namespace vg
 
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
 #undef MemoryBarrier
-            vk::MemoryBarrier memoryBarrier({}, {});
-            //    vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV,
-            //    vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV
-            //);
+            vk::MemoryBarrier memoryBarrier(
+                vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV,
+                vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV
+            );
 #define MemoryBarrier __faststorefence
 
             //todo remove this when the SDK update happened
@@ -378,13 +398,14 @@ namespace vg
                 vk::AccelerationStructureInfoNV asInfoBot(vk::AccelerationStructureTypeNV::eBottomLevel, {}, 0, 1, &geometryVec.at(i));
                 OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoBot), nullptr, 0, VK_FALSE, m_bottomASs.at(i).m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
                 //cmdBuf.buildAccelerationStructureNV(asInfoBot, nullptr, 0, VK_FALSE, m_bottomAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
-                cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, {}, memoryBarrier, nullptr, nullptr);
+                cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
+            
             }
 
             vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, {}, instances.size(), 0, nullptr);
             OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoTop), m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             //cmdBuf.buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
-            cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
+            cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
 
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
         }

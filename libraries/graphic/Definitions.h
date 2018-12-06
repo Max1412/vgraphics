@@ -63,7 +63,7 @@ namespace vg
     struct VertexPosUvNormal
     {
         glm::vec3 pos;
-        uint32_t pad1 = 0;
+        int32_t texID = -1;
         glm::vec2 uv;
         uint32_t pad2 = 0;
         uint32_t pad3 = 0;
