@@ -37,13 +37,9 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            createPerFrameInformation();
-
             createCommandBuffers();
             createSyncObjects();
         }
-
-        void createPerFrameInformation() override {}
 
         // todo clarify what is here and what is in cleanupswapchain
         ~FSApp()
@@ -270,11 +266,9 @@ namespace vg
             }
         }
 
-        void updatePerFrameInformation(uint32_t currentImage) override
+		void recordPerFrameCommandBuffers(uint32_t currentImage) override
         {
-            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
 
-            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
         }
 
         void mainLoop()

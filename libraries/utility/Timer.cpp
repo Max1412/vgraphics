@@ -9,7 +9,7 @@ void Timer::acquireCurrentTimestamp(const vk::Device& device, const vk::QueryPoo
         throw std::runtime_error("Query not successful");
 
     // save elapsed time
-    m_timeDiffs.push_back((m_currentTimestamp - m_lastTimestamp) / 1'000'000.0);
+    m_timeDiffs.push_back(static_cast<float>((m_currentTimestamp - m_lastTimestamp) / 1'000'000.0));
 
     // max 1000 time diffs
     if (m_timeDiffs.size() > 1000)

@@ -139,36 +139,53 @@ Scene::Scene(const std::filesystem::path& filename)
     if (!scene->HasMaterials())
         throw std::runtime_error("No Materials in Scene");
 
+	auto getTexturePaths = [&](const aiMaterial* mat, aiTextureType type, auto& set, auto& vec, const int index)
+	{
+		if (mat->GetTextureCount(type) > 0)
+		{
+			aiString reltexPath;
+			const auto ret = mat->GetTexture(type, 0, &reltexPath);
+			if (ret != AI_SUCCESS) throw std::runtime_error("Texture couldn't be loaded by assimp");
+
+			auto[it, notAlreadyThere] = set.emplace(reltexPath.C_Str());
+			if (notAlreadyThere)
+			{
+				vec.emplace_back(std::make_pair(std::vector<unsigned>( 1, index ), reltexPath.C_Str()));
+			}
+			else // find the texture if it already exists, and append its materialindex
+			{
+				auto prevTexIt = std::find_if(vec.begin(), vec.end(),
+					[&reltexPath](const auto& bla) { return std::strcmp(bla.second.c_str(), reltexPath.C_Str()) == 0; });
+				if (prevTexIt == vec.end()) throw std::runtime_error("Expected to find texture path, but none found.");
+				prevTexIt->first.push_back(index);
+			}
+		}
+	};
+
     for(unsigned i = 0; i < scene->mNumMaterials; i++)
     {
         const auto mat = scene->mMaterials[i];
         // todo other types
-        for(aiTextureType type : {aiTextureType_DIFFUSE})
+        for(aiTextureType type : {aiTextureType_DIFFUSE, aiTextureType_SPECULAR})
         {
-            if(mat->GetTextureCount(type) > 0)
-            {
-                aiString reltexPath;
-                const auto ret = mat->GetTexture(type, 0, &reltexPath);
-                if (ret != AI_SUCCESS) throw std::runtime_error("Texture couldn't be loaded by assimp");
-
-                auto [it, notAlreadyThere] = m_texturePathSet.emplace(reltexPath.C_Str());
-                if(notAlreadyThere)
-                {
-                    m_indexedTexturePaths.emplace_back(std::make_pair( std::vector{ i }, reltexPath.C_Str() ));
-                }
-                else // find the texture if it already exists, and append its materialindex
-                {
-                    auto prevTexIt = std::find_if(m_indexedTexturePaths.begin(), m_indexedTexturePaths.end(),
-                        [&reltexPath](const auto& bla) { return std::strcmp(bla.second.c_str(), reltexPath.C_Str()) == 0; });
-                    if (prevTexIt == m_indexedTexturePaths.end()) throw std::runtime_error("Expected to find texture path, but none found.");
-                    prevTexIt->first.push_back(i);
-                }
-            }
+	        switch (type)
+	        {
+			case aiTextureType_DIFFUSE:
+				getTexturePaths(mat, type, m_texturesDiffusePathSet, m_indexedDiffuseTexturePaths, i);
+				break;
+			case aiTextureType_SPECULAR:
+				getTexturePaths(mat, type, m_texturesSpecularPathSet, m_indexedSpecularTexturePaths, i);
+				break;
+			default:
+				break;
+	        }
         }
     }
 
+
+
     int uniqueTexIndex = 0;
-    for(const auto& indexTexPair : m_indexedTexturePaths)
+    for(const auto& indexTexPair : m_indexedDiffuseTexturePaths)
     {
         for (unsigned index : indexTexPair.first)
             for (auto& mesh : m_meshes)
@@ -178,7 +195,20 @@ Scene::Scene(const std::filesystem::path& filename)
         uniqueTexIndex++;
     }
 
+	int uniqueSpecTexIndex = 0;
+	for (const auto& indexTexPair : m_indexedSpecularTexturePaths)
+	{
+		for (unsigned index : indexTexPair.first)
+			for (auto& mesh : m_meshes)
+				if (mesh.assimpMaterialIndex == index)
+					mesh.texSpecIndex = uniqueSpecTexIndex + static_cast<int32_t>(m_indexedDiffuseTexturePaths.size());
+
+		uniqueSpecTexIndex++;
+	}
+
     
     importer.FreeScene();
+
+	std::cout << "Geometry Processing complete" << std::endl;
 
 }

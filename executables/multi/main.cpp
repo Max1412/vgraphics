@@ -37,15 +37,15 @@ namespace vg
 			m_scene("San_Miguel/san-miguel-low-poly.obj")
 		{
             createRenderPass();
-            createDescriptorSetLayout();
 
-            createGraphicsPipeline();
             createCommandPools();
+            createSceneInformation("San_Miguel/");
+            createDescriptorSetLayout();
+            createGraphicsPipeline();
 
             createDepthResources();
             createFramebuffers();
 
-            createSceneInformation("San_Miguel/");
 
             createVertexBuffer();
             createIndexBuffer();
@@ -112,14 +112,14 @@ namespace vg
         void createSceneInformation(const char * foldername)
         {
 			// load all images
-			std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedTexturePaths().size());
+			std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedDiffuseTexturePaths().size());
             stbi_set_flip_vertically_on_load(true);
 
 #pragma omp parallel for
-			for (int i = 0; i < m_scene.getIndexedTexturePaths().size(); i++)
+			for (int i = 0; i < m_scene.getIndexedDiffuseTexturePaths().size(); i++)
 			{
                 auto path = g_resourcesPath;
-                const auto name = std::string(std::string(foldername) + m_scene.getIndexedTexturePaths().at(i).second);
+                const auto name = std::string(std::string(foldername) + m_scene.getIndexedDiffuseTexturePaths().at(i).second);
                 path.append(name);
                 loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
                 loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
@@ -211,7 +211,7 @@ namespace vg
             {
                 allImageInfos.emplace_back(m_allImageSamplers.at(i), m_allImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
             }
-            vk::WriteDescriptorSet descWriteAllImages(m_descriptorSets.at(0), 3, 0, m_allImages.size(), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
+            vk::WriteDescriptorSet descWriteAllImages(m_descriptorSets.at(0), 3, 0, static_cast<uint32_t>(m_allImages.size()), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
 
             std::array<vk::WriteDescriptorSet, 3> descriptorWrites = { descWrite, descWrite2, descWriteAllImages };
             m_context.getDevice().updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
@@ -224,7 +224,7 @@ namespace vg
 
             vk::DescriptorSetLayoutBinding samplerLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
 
-            vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(3, vk::DescriptorType::eCombinedImageSampler, m_scene.getIndexedTexturePaths().size(), vk::ShaderStageFlagBits::eFragment, nullptr);
+            vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(3, vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImages.size()), vk::ShaderStageFlagBits::eFragment, nullptr);
 
 
             std::array<vk::DescriptorSetLayoutBinding, 4> bindings = { modelMatrixSSBOLayoutBinding, samplerLayoutBinding, perMeshInformationIndirectDrawSSBOLB, allTexturesLayoutBinding };
@@ -295,7 +295,7 @@ namespace vg
 
             // specialization constant for the number of textures
             vk::SpecializationMapEntry mapEntry(0, 0, sizeof(int32_t));
-            int32_t numTextures = static_cast<int32_t>(m_scene.getIndexedTexturePaths().size());
+            int32_t numTextures = static_cast<int32_t>(m_allImages.size());
             vk::SpecializationInfo numTexturesSpecInfo(1, &mapEntry, sizeof(int32_t), &numTextures);
 
             const vk::PipelineShaderStageCreateInfo vertShaderStageInfo({}, vk::ShaderStageFlagBits::eVertex, vertShaderModule, "main");

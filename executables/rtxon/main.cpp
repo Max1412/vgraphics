@@ -1,6 +1,8 @@
 #include <iostream>
 #include <filesystem>
 
+
+
 #include <vulkan/vulkan.hpp>
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // use Vulkans depth range [0, 1]
@@ -35,7 +37,7 @@ namespace vg
     public:
         MultiApp() : BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
 			m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
-			m_scene("Interior/interior.obj")
+			m_scene("Sponza/sponza.obj")
         {
             createRenderPass();
             //createDescriptorSetLayout();
@@ -46,7 +48,7 @@ namespace vg
             createDepthResources();
             createFramebuffers();
 
-            createSceneInformation("Interior/");
+            createSceneInformation("sponza/");
 
             createVertexBuffer();
             createIndexBuffer();
@@ -115,19 +117,30 @@ namespace vg
 
         void createSceneInformation(const char * foldername)
         {
+			std::cout << "Loading Textures..." << std::endl;
             // load all images
-            std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedTexturePaths().size());
+            std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedDiffuseTexturePaths().size() + m_scene.getIndexedSpecularTexturePaths().size());
             stbi_set_flip_vertically_on_load(true);
 
 #pragma omp parallel for
-            for (int i = 0; i < m_scene.getIndexedTexturePaths().size(); i++)
+            for (int i = 0; i < static_cast<int>(m_scene.getIndexedDiffuseTexturePaths().size()); i++)
             {
                 auto path = g_resourcesPath;
-                const auto name = std::string(std::string(foldername) + m_scene.getIndexedTexturePaths().at(i).second);
+                const auto name = std::string(std::string(foldername) + m_scene.getIndexedDiffuseTexturePaths().at(i).second);
                 path.append(name);
                 loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
                 loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
             }
+
+#pragma omp parallel for
+			for (int i = static_cast<int>(m_scene.getIndexedDiffuseTexturePaths().size()); i < static_cast<int>(loadedImages.size()); i++)
+			{
+				auto path = g_resourcesPath;
+				const auto name = std::string(std::string(foldername) + m_scene.getIndexedSpecularTexturePaths().at(i - m_scene.getIndexedDiffuseTexturePaths().size()).second);
+				path.append(name);
+				loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
+				loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
+			}
 
             for (const auto& ili : loadedImages)
             {
@@ -147,35 +160,20 @@ namespace vg
                 m_allImageSamplers.push_back(m_context.getDevice().createSampler(samplerInfo));
 
             }
+
+			std::cout << "Texture loading complete." << std::endl;
+
         }
-
-        //struct Vertex
-        //{
-        //    float X, Y, Z;
-        //};
-
-        //std::vector<Vertex> vertices
-        //{
-        //    { -0.5f, -0.5f, 0.0f },
-        //    { +0.0f, +0.5f, 0.0f },
-        //    { +0.5f, -0.5f, 0.0f }
-        //};
-        //std::vector<uint16_t> indices
-        //{
-        //    { 0, 1, 2 }
-        //};
 
         void createVertexBuffer()
         {
             m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getVertices(), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer);
-            //m_vertexBufferInfo = fillBufferTroughStagedTransfer(vertices, vk::BufferUsageFlagBits::eVertexBuffer);
 
         }
 
         void createIndexBuffer()
         {
             m_indexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getIndices(), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eStorageBuffer);
-            //m_indexBufferInfo = fillBufferTroughStagedTransfer(indices, vk::BufferUsageFlagBits::eIndexBuffer);
         }
 
         //void createIndirectDrawBuffer()
@@ -190,6 +188,10 @@ namespace vg
 
         void createAccelerationStructure()
         {
+			//TODO for this function:
+			//	* use less for-loops and indices, some can be merged
+			//	* support using transforms (?)
+
             //// Helper Buffers for Ray Tracing
 
             // Offset Buffer
@@ -207,13 +209,12 @@ namespace vg
             int j = 0;
             for(const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
             {
-                offsetInfos.push_back(OffsetInfo{ meshInfo.vertexOffset, indexOffset0, meshInfo.texIndex, -1 });
+                offsetInfos.push_back(OffsetInfo{ meshInfo.vertexOffset, indexOffset0, meshInfo.texIndex, meshInfo.texSpecIndex });
                 indexOffset0 += meshInfo.indexCount;
 
                 j++;
             }
             m_offsetBufferInfo = fillBufferTroughStagedTransfer(offsetInfos, vk::BufferUsageFlagBits::eStorageBuffer);
-			//m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getVertices(), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eStorageBuffer);
 
             std::vector<vk::GeometryNV> geometryVec;
 
@@ -233,13 +234,13 @@ namespace vg
             for(const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
             {
 
-                uint64_t vertexCount = 0;
+                uint32_t vertexCount = 0;
 
                 //todo check this calculation
                 if (c < m_scene.getDrawCommandData().size()-1)
                     vertexCount = m_scene.getDrawCommandData().at(c + 1).vertexOffset - meshInfo.vertexOffset;
                 else
-                    vertexCount = m_scene.getVertices().size() - meshInfo.vertexOffset;
+                    vertexCount = static_cast<uint32_t>(m_scene.getVertices().size()) - meshInfo.vertexOffset;
 
                 vk::GeometryTrianglesNV triangles;
                 triangles.vertexData = m_vertexBufferInfo.m_Buffer;
@@ -294,7 +295,7 @@ namespace vg
                 allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 				allocInfo.memoryTypeBits = findMemoryType(memReqs.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
                 vmaAllocateMemory(m_context.getAllocator(),
-                    reinterpret_cast<VkMemoryRequirements*>(&memReqs.memoryRequirements), //TODO vma doesn't know about memReq2, does this even work?
+                    reinterpret_cast<VkMemoryRequirements*>(&memReqs.memoryRequirements),
                     &allocInfo, &returnInfo.m_BufferAllocation, &returnInfo.m_BufferAllocInfo);
 
                 //todo cleanup: destroy AS, free memory
@@ -311,21 +312,24 @@ namespace vg
 
             struct GeometryInstance
             {
+				// row major 4x3 model matrix
                 float transform[12];
+
+				// instanceId is exposed as gl_InstanceCustomIndexNV
                 uint32_t instanceId : 24;
+
+				// mask to exclude hitting this geometry. if rayMask & instance.mask == 0, the geometry will NOT be hit
                 uint32_t mask : 8;
+
+				// instance offset is basically the hit shader index. 0 if only one hit shader is present
                 uint32_t instanceOffset : 24;
+
+				// any of VkGeometryInstanceFlagBitsNV 
                 uint32_t flags : 8;
+
+				// bottom level AS handle this instance corresponds to
                 uint64_t accelerationStructureHandle;
             };
-
-
-            //float transform[12] =
-            //{
-            //    1.0f, 0.0f, 0.0f, 1.0f,
-            //    0.0f, 1.0f, 0.0f, 0.0f,
-            //    0.0f, 0.0f, 1.0f, 0.0f,
-            //};
 
             std::vector<GeometryInstance> instances;
 
@@ -333,10 +337,8 @@ namespace vg
             for (const auto& modelMatrix : m_scene.getModelMatrices())
             {
                 GeometryInstance instance = {};
-                //glm::mat4x3 transform(glm::transpose(glm::mat4(1.0f))) ;
-				auto transform = toRowMajor4x3(glm::mat4(1.0f));// modelMatrix);
+				auto transform = toRowMajor4x3(modelMatrix);
                 memcpy(instance.transform, glm::value_ptr(transform), sizeof(instance.transform));
-                //memcpy(instance.transform, transform, sizeof(instance.transform));
                 instance.instanceId = count;
                 instance.mask = 0xff;
                 instance.instanceOffset = 0;
@@ -402,7 +404,7 @@ namespace vg
             
             }
 
-            vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, {}, instances.size(), 0, nullptr);
+            vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, {}, static_cast<uint32_t>(instances.size()), 0, nullptr);
             OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoTop), m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             //cmdBuf.buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
@@ -419,7 +421,7 @@ namespace vg
             // Image Load/Store for output
             vk::DescriptorSetLayoutBinding oiLB(1, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
             // texture array
-            vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, m_scene.getIndexedTexturePaths().size(), vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+            vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImages.size()), vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 
             // buffers
             vk::DescriptorSetLayoutBinding vertexBufferLB(3, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
@@ -429,7 +431,7 @@ namespace vg
 
             std::array<vk::DescriptorSetLayoutBinding, 6> bindings = { asLB, oiLB, allTexturesLayoutBinding, vertexBufferLB, indexBufferLB, offsetBufferLB };
 
-            vk::DescriptorSetLayoutCreateInfo layoutInfo({}, bindings.size(), bindings.data());
+            vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
             m_rayTracingDescriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
 
@@ -446,7 +448,7 @@ namespace vg
 
             // specialization constant for the number of textures
             vk::SpecializationMapEntry mapEntry(0, 0, sizeof(int32_t));
-            int32_t numTextures = static_cast<int32_t>(m_scene.getIndexedTexturePaths().size());
+            int32_t numTextures = static_cast<int32_t>(m_scene.getIndexedDiffuseTexturePaths().size());
             vk::SpecializationInfo numTexturesSpecInfo(1, &mapEntry, sizeof(int32_t), &numTextures);
 
             const std::array<vk::PipelineShaderStageCreateInfo, 3> rtShaderStageInfos = {
@@ -459,7 +461,7 @@ namespace vg
                 vk::PushConstantRange{vk::ShaderStageFlagBits::eRaygenNV, 0, 2 * sizeof(glm::mat4)},
             };
 
-            vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, 1, &m_rayTracingDescriptorSetLayout, vpcr.size(), vpcr.data());
+            vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, 1, &m_rayTracingDescriptorSetLayout, static_cast<uint32_t>(vpcr.size()), vpcr.data());
 
             m_rayTracingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutCreateInfo);
 
@@ -473,8 +475,8 @@ namespace vg
             };
 
             vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
-                rtShaderStageInfos.size(), rtShaderStageInfos.data(),
-                shaderGroups.size(), shaderGroups.data(),
+				static_cast<uint32_t>(rtShaderStageInfos.size()), rtShaderStageInfos.data(),
+				static_cast<uint32_t>(shaderGroups.size()), shaderGroups.data(),
                 m_context.getRaytracingProperties().maxRecursionDepth,
                 m_rayTracingPipelineLayout,
                 nullptr, 0
@@ -507,12 +509,12 @@ namespace vg
 
             };
 
-            vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo({}, m_swapChainFramebuffers.size(), poolSizes.size(), poolSizes.data());
+            vk::DescriptorPoolCreateInfo descriptorPoolCreateInfo({}, static_cast<uint32_t>(m_swapChainFramebuffers.size()), static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
             m_rayTracingDescriptorPool = m_context.getDevice().createDescriptorPool(descriptorPoolCreateInfo);
 
             // create n descriptor sets
             std::vector<vk::DescriptorSetLayout> dsls(m_swapChainFramebuffers.size(), m_rayTracingDescriptorSetLayout);
-            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_rayTracingDescriptorPool, m_swapChainFramebuffers.size(), dsls.data());
+            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_rayTracingDescriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), dsls.data());
             m_rayTracingDescriptorSets = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo);
 
 
@@ -532,7 +534,7 @@ namespace vg
                 vk::DescriptorImageInfo descriptorOutputImageInfo(nullptr, m_context.getSwapChainImageViews().at(i), vk::ImageLayout::eGeneral); // maybe layout colorAttachment?
                 vk::WriteDescriptorSet outputImageWrite(m_rayTracingDescriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eStorageImage, &descriptorOutputImageInfo, nullptr, nullptr);
 
-                vk::WriteDescriptorSet descWriteAllImages(m_rayTracingDescriptorSets.at(i), 2, 0, m_allImages.size(), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
+                vk::WriteDescriptorSet descWriteAllImages(m_rayTracingDescriptorSets.at(i), 2, 0, static_cast<uint32_t>(m_allImages.size()), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
 
                 vk::DescriptorBufferInfo vbInfo(m_vertexBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
                 vk::WriteDescriptorSet descWriteVertexBuffer(m_rayTracingDescriptorSets.at(i), 3, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &vbInfo, nullptr);
@@ -656,7 +658,7 @@ namespace vg
 
         //    vk::DescriptorSetLayoutBinding samplerLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
 
-        //    vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(3, vk::DescriptorType::eCombinedImageSampler, m_scene.getIndexedTexturePaths().size(), vk::ShaderStageFlagBits::eFragment, nullptr);
+        //    vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(3, vk::DescriptorType::eCombinedImageSampler, m_scene.getIndexedDiffuseTexturePaths().size(), vk::ShaderStageFlagBits::eFragment, nullptr);
 
 
         //    std::array<vk::DescriptorSetLayoutBinding, 4> bindings = { modelMatrixSSBOLayoutBinding, samplerLayoutBinding, perMeshInformationIndirectDrawSSBOLB, allTexturesLayoutBinding };
@@ -727,7 +729,7 @@ namespace vg
 
             //// specialization constant for the number of textures
             //vk::SpecializationMapEntry mapEntry(0, 0, sizeof(int32_t));
-            //int32_t numTextures = static_cast<int32_t>(m_scene.getIndexedTexturePaths().size());
+            //int32_t numTextures = static_cast<int32_t>(m_scene.getIndexedDiffuseTexturePaths().size());
             //vk::SpecializationInfo numTexturesSpecInfo(1, &mapEntry, sizeof(int32_t), &numTextures);
 
             //const vk::PipelineShaderStageCreateInfo vertShaderStageInfo({}, vk::ShaderStageFlagBits::eVertex, vertShaderModule, "main");

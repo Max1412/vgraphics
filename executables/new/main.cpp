@@ -180,7 +180,7 @@ namespace vg
             }
         }
 
-        void createPerFrameInformation() override
+        void createPerFrameInformation()
         {
             m_camera = Pilotview(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height);
             m_camera.setSensitivity(0.01f);

@@ -18,6 +18,7 @@ struct PerMeshInfo
     uint    firstInstance;
     // additional
     int texIndex;
+    int texSpecIndex;
     int assimpMaterialIndex;
 };
 

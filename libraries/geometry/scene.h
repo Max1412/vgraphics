@@ -21,6 +21,7 @@
 struct PerMeshInfo : vk::DrawIndexedIndirectCommand
 {
     int texIndex = -1;
+	int texSpecIndex = -1;
     int assimpMaterialIndex = -1;
 };
 
@@ -34,13 +35,19 @@ public:
     const std::vector<uint32_t>& getIndices() const { return m_allIndices; }
     const std::vector<PerMeshInfo>& getDrawCommandData() const { return m_meshes; }
     const std::vector<glm::mat4>& getModelMatrices() const { return m_modelMatrices; }
-    const std::vector<std::pair<std::vector<unsigned>, std::string>>& getIndexedTexturePaths() const { return m_indexedTexturePaths;  }
+    const std::vector<std::pair<std::vector<unsigned>, std::string>>& getIndexedDiffuseTexturePaths() const { return m_indexedDiffuseTexturePaths;  }
+	const std::vector<std::pair<std::vector<unsigned>, std::string>>& getIndexedSpecularTexturePaths() const { return m_indexedSpecularTexturePaths; }
 
 private:
     std::vector<uint32_t> m_allIndices;
     std::vector<vg::VertexPosUvNormal> m_allVertices;
     std::vector<PerMeshInfo> m_meshes;
     std::vector<glm::mat4> m_modelMatrices;
-    std::set<std::string> m_texturePathSet;
-    std::vector<std::pair<std::vector<unsigned>, std::string>> m_indexedTexturePaths;
+
+    std::set<std::string> m_texturesDiffusePathSet;
+	std::set<std::string> m_texturesSpecularPathSet;
+
+    std::vector<std::pair<std::vector<unsigned>, std::string>> m_indexedDiffuseTexturePaths;
+	std::vector<std::pair<std::vector<unsigned>, std::string>> m_indexedSpecularTexturePaths;
+
 };
