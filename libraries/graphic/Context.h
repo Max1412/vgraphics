@@ -5,6 +5,7 @@
 #include "Definitions.h"
 #include "vma/vk_mem_alloc.h"
 #include <GLFW/glfw3.h>
+#include <spdlog/spdlog.h>
 
 namespace vg
 {
@@ -98,6 +99,8 @@ namespace vg
 
         vk::PhysicalDeviceRayTracingPropertiesNV getRaytracingProperties() { return m_raytracingProperties.value(); }
 
+		const std::shared_ptr<spdlog::logger>& getLogger() const { return m_logger; }
+
     private:
         // vk initialisation objects
         vk::Instance m_instance;
@@ -132,6 +135,9 @@ namespace vg
 		// device extensions required by app
 		std::vector<const char*> m_requiredDeviceExtensions;
 		std::optional<vk::PhysicalDeviceRayTracingPropertiesNV> m_raytracingProperties;
+
+		// logger
+		std::shared_ptr<spdlog::logger> m_logger;
     };
 }
 

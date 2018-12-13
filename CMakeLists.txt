@@ -16,6 +16,8 @@ find_package(assimp REQUIRED)
 find_package(glm 0.9.8 REQUIRED)
 find_package(glfw3 3.2.1 REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(fmt REQUIRED)
 
 #list(APPEND G2_INCLUDE_DIRECTORIES ${GLEW_INCLUDE_PATH})
 
@@ -52,7 +54,7 @@ foreach(subdir ${children})
             set(success 0)
         else()
             add_library(${subdir} ${G2_SOURCE_FILE})
-            target_link_libraries(${subdir} PRIVATE glfw Vulkan::Vulkan ${ASSIMP_LIBRARIES} glm)
+            target_link_libraries(${subdir} PRIVATE glfw Vulkan::Vulkan spdlog::spdlog ${ASSIMP_LIBRARIES} fmt::fmt-header-only glm)
 
             list(APPEND G2_LIBRARIES ${subdir})
             set_target_properties(${subdir} PROPERTIES
@@ -106,7 +108,7 @@ foreach(subdir ${children})
 
         add_executable(${subdir} ${EXE_SOURCES})
         target_link_libraries(${subdir} PRIVATE ${G2_LIBRARIES})
-        target_link_libraries(${subdir} PRIVATE glfw Vulkan::Vulkan ${ASSIMP_LIBRARIES} glm)
+        target_link_libraries(${subdir} PRIVATE glfw Vulkan::Vulkan spdlog::spdlog ${ASSIMP_LIBRARIES} fmt::fmt-header-only glm)
         #file(COPY ${G2_DLLS} DESTINATION "${G2_BINARIES_FOLDER}")
         set_target_properties(${subdir} PROPERTIES
 										LINKER_LANGUAGE CXX

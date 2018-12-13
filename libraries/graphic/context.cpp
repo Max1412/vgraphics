@@ -103,6 +103,11 @@ namespace vg
 
 	Context::Context(const std::vector<const char*>& requiredDeviceExtensions) : m_requiredDeviceExtensions(requiredDeviceExtensions)
     {
+		// init logger
+		m_logger = spdlog::stdout_color_mt("standard");
+		m_logger->info("Logger initialized.");
+
+		// init rest
         initWindow();
         initVulkan();
         initImgui();
@@ -250,8 +255,26 @@ namespace vg
         const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
         void* pUserData)
     {
+		auto logger = spdlog::get("standard");
+
         // todo log this properly depending on severity & type
-        std::cout << "Validation layer says: " << pCallbackData->pMessage << std::endl;
+		switch (messageSeverity)
+		{
+			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+				logger->info("Validation layer: {} -- {}", vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(messageType)), pCallbackData->pMessage);
+				break;
+			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+				logger->info("Validation layer: {} -- {}", vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(messageType)), pCallbackData->pMessage);
+				break;
+			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+				logger->warn("Validation layer: {} -- {}", vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(messageType)), pCallbackData->pMessage);
+				break;
+			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: 
+				logger->critical("Validation layer: {} -- {}", vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(messageType)), pCallbackData->pMessage);
+				break;
+			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_FLAG_BITS_MAX_ENUM_EXT: break;
+			default: break ;
+		}
         return VK_FALSE;
     }
 

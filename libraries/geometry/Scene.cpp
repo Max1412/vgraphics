@@ -8,8 +8,11 @@
 
 Scene::Scene(const std::filesystem::path& filename)
 {
-    std::cout << "Loading model from " << filename.string() << std::endl;
+	auto logger = spdlog::get("standard");
+
     auto path = vg::g_resourcesPath / filename;
+
+	logger->info("Loading model from {}", path.string().c_str());
     Assimp::Importer importer;
 
     auto scene = importer.ReadFile(path.string().c_str(), aiProcess_GenSmoothNormals |
@@ -36,7 +39,7 @@ Scene::Scene(const std::filesystem::path& filename)
         throw std::runtime_error("Assimp import failed: " + err);
     }
 
-    std::cout << "Assimp import complete. Processing Model..." << std::endl;
+	logger->info("Assimp import complete. Processing Model...");
 
     if (!scene->HasMeshes())
         throw std::runtime_error("No meshes found!");
@@ -180,6 +183,12 @@ Scene::Scene(const std::filesystem::path& filename)
 				break;
 	        }
         }
+
+		aiColor3D diffColor;
+    	mat->Get(AI_MATKEY_COLOR_DIFFUSE, diffColor);
+
+		aiColor3D specColor;
+		mat->Get(AI_MATKEY_COLOR_SPECULAR, specColor);
     }
 
 
@@ -209,6 +218,6 @@ Scene::Scene(const std::filesystem::path& filename)
     
     importer.FreeScene();
 
-	std::cout << "Geometry Processing complete" << std::endl;
+	logger->info("Geometry Processing complete");
 
 }

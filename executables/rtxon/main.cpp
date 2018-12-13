@@ -117,7 +117,7 @@ namespace vg
 
         void createSceneInformation(const char * foldername)
         {
-			std::cout << "Loading Textures..." << std::endl;
+			m_context.getLogger()->info("Loading Textures...");
             // load all images
             std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedDiffuseTexturePaths().size() + m_scene.getIndexedSpecularTexturePaths().size());
             stbi_set_flip_vertically_on_load(true);
@@ -161,7 +161,7 @@ namespace vg
 
             }
 
-			std::cout << "Texture loading complete." << std::endl;
+			m_context.getLogger()->info("Texture loading complete.");
 
         }
 
