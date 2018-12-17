@@ -103,14 +103,28 @@ namespace vg
                 m_context.getDevice().destroyImageView(view);
             for(const auto& image : m_allImages)
                 vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
-/*
-            m_context.getDevice().destroyDescriptorPool(m_descriptorPool);
-            m_context.getDevice().destroyDescriptorSetLayout(m_descriptorSetLayout);
 
-            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_modelMatrixBufferInfo.m_Buffer), m_modelMatrixBufferInfo.m_BufferAllocation);*/
+            m_context.getDevice().destroyDescriptorPool(m_rayTracingDescriptorPool);
+            m_context.getDevice().destroyDescriptorSetLayout(m_rayTracingDescriptorSetLayout);
 
-            //m_context.getDevice().destroyPipeline(m_graphicsPipeline);
-            //m_context.getDevice().destroyPipelineLayout(m_pipelineLayout);
+			vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_offsetBufferInfo.m_Buffer), m_offsetBufferInfo.m_BufferAllocation);
+			vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_instanceBufferInfo.m_Buffer), m_instanceBufferInfo.m_BufferAllocation);
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_scratchBuffer.m_Buffer), m_scratchBuffer.m_BufferAllocation);
+			vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_sbtInfo.m_Buffer), m_sbtInfo.m_BufferAllocation);
+
+			
+			m_context.getDevice().destroyAccelerationStructureNV(m_topAS.m_AS);
+			vmaFreeMemory(m_context.getAllocator(), m_topAS.m_BufferAllocation);
+
+			for(const auto& as : m_bottomASs)
+			{
+				m_context.getDevice().destroyAccelerationStructureNV(as.m_AS);
+				vmaFreeMemory(m_context.getAllocator(), as.m_BufferAllocation);
+			}
+
+			m_context.getDevice().destroyPipeline(m_rayTracingPipeline);
+			m_context.getDevice().destroyPipelineLayout(m_rayTracingPipelineLayout);
+
             m_context.getDevice().destroyRenderPass(m_renderpass);
             // cleanup here
         }
@@ -490,7 +504,6 @@ namespace vg
 
             m_sbtInfo = createBuffer(shaderBindingTableSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_TO_GPU);
             void* mappedData;
-            vmaMapMemory(m_context.getAllocator(), m_sbtInfo.m_BufferAllocation, &mappedData);
             vmaMapMemory(m_context.getAllocator(), m_sbtInfo.m_BufferAllocation, &mappedData);
             const auto res = m_context.getDevice().getRayTracingShaderGroupHandlesNV(m_rayTracingPipeline, 0, rayPipelineInfo.groupCount, shaderBindingTableSize, mappedData);
             if (res != vk::Result::eSuccess) throw std::runtime_error("Failed to retrieve Shader Group Handles");
