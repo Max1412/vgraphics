@@ -43,3 +43,34 @@ void Timer::drawGUIWindow()
    
     ImGui::End();
 }
+
+void Timer::drawGUI()
+{
+    float acc = 0;
+    if (m_timeDiffs.size() > 21)
+    {
+        for (auto i = m_timeDiffs.size() - 21; i < m_timeDiffs.size(); ++i)
+        {
+            acc += m_timeDiffs.at(i);
+        }
+        acc /= 20.0f;
+    }
+
+    const float availableWidth = ImGui::GetContentRegionAvailWidth();
+    if (availableWidth >= 300)
+        ImGui::SameLine(ImGui::GetWindowContentRegionWidth() - 300);
+    else if (availableWidth >= 70)
+        ImGui::SameLine(ImGui::GetWindowContentRegionWidth() - 70);
+
+    ImGui::PushItemWidth(70);
+    ImGui::Text("%.3f ms", acc);
+
+    if (availableWidth >= 300)
+    {
+        ImGui::SameLine(ImGui::GetWindowContentRegionWidth() - 230);
+        ImGui::PushItemWidth(240);
+        const auto offset = static_cast<int>(m_timeDiffs.size() <= 240 ? m_timeDiffs.size() - 1 : 240);
+        if(!m_timeDiffs.empty())
+            ImGui::PlotLines("", &m_timeDiffs.back() - offset, offset, 0, nullptr, 0.0f, std::numeric_limits<float>::max());
+    }
+}

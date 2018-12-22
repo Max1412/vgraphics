@@ -508,8 +508,20 @@ namespace vg
             ImGui::NewFrame();
 
             ////// ImGUI WINDOWS GO HERE
-            ImGui::ShowDemoWindow();
-            m_timer.drawGUIWindow();
+            if (ImGui::BeginMainMenuBar())
+            {
+                if (ImGui::BeginMenu("Test"))
+                {
+                    if(ImGui::Checkbox("Show demo window", &m_imguiShowDemoWindow)){}
+                    ImGui::EndMenu();
+                }
+
+                if(m_imguiShowDemoWindow) ImGui::ShowDemoWindow();
+
+                m_timer.drawGUI();
+                ImGui::EndMainMenuBar();
+
+            }
             /////////////////////////////
 
             ImGui::Render();
@@ -590,6 +602,8 @@ namespace vg
         Scene m_scene;
 
         Timer m_timer;
+
+        bool m_imguiShowDemoWindow = false;
     };
 }
 
