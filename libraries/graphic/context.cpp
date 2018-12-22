@@ -4,6 +4,7 @@
 #include "Context.h"
 #include "imgui/imgui_impl_vulkan.h"
 #include "imgui/imgui_impl_glfw.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
 
 namespace help
 {
