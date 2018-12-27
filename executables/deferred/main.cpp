@@ -112,10 +112,14 @@ namespace vg
                 m_context.getDevice().destroySampler(sampler);
             for (const auto& sampler : m_gbufferNormalSamplers)
                 m_context.getDevice().destroySampler(sampler);
+            for (const auto& sampler : m_gbufferUVSamplers)
+                m_context.getDevice().destroySampler(sampler);
 
             for (const auto& view : m_gbufferPositionImageViews)
                 m_context.getDevice().destroyImageView(view);
             for (const auto& view : m_gbufferNormalImageViews)
+                m_context.getDevice().destroyImageView(view);
+            for (const auto& view : m_gbufferUVImageViews)
                 m_context.getDevice().destroyImageView(view);
             for (const auto& view : m_gbufferDepthImageViews)
                 m_context.getDevice().destroyImageView(view);
@@ -123,6 +127,8 @@ namespace vg
             for (const auto& image : m_gbufferPositionImageInfos)
                 vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
             for (const auto& image : m_gbufferNormalImageInfos)
+                vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
+            for (const auto& image : m_gbufferUVImageInfos)
                 vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
             for (const auto& image : m_gbufferDepthImages)
                 vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
@@ -167,6 +173,15 @@ namespace vg
 
             vk::AttachmentReference normalAttachmentRef(1, vk::ImageLayout::eColorAttachmentOptimal);
 
+            vk::AttachmentDescription uvAttachment({}, vk::Format::eR32G32Sfloat, //TODO use saved format, not hard-coded
+                vk::SampleCountFlagBits::e1,
+                vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,            // load store op
+                vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
+                vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal //TODO is this the right layout? maybe colorattachmentoptimal
+            );
+
+            vk::AttachmentReference uvAttachmentRef(2, vk::ImageLayout::eColorAttachmentOptimal);
+
 
             vk::AttachmentDescription depthAttachment({}, vk::Format::eD32SfloatS8Uint,
                 vk::SampleCountFlagBits::e1,
@@ -175,13 +190,13 @@ namespace vg
                 vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal
             );
 
-            vk::AttachmentReference depthAttachmentRef(2, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+            vk::AttachmentReference depthAttachmentRef(3, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 
             vk::SubpassDependency dependency(VK_SUBPASS_EXTERNAL, 0,
                 vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
                 {}, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::DependencyFlagBits::eByRegion);
 
-            std::array<vk::AttachmentReference, 2> colorAttachmentRefs = { positionAttachmentRef, normalAttachmentRef };
+            std::array<vk::AttachmentReference, 3> colorAttachmentRefs = { positionAttachmentRef, normalAttachmentRef, uvAttachmentRef };
 
             vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics,
                 0, nullptr,                 // input attachments (standard values)
@@ -190,7 +205,7 @@ namespace vg
                 &depthAttachmentRef);       // depth stencil attachment
                                             // other attachment at standard values: Preserved
 
-            std::array<vk::AttachmentDescription, 3> attachments = { positionAttachment, normalAttachment, depthAttachment };
+            std::array<vk::AttachmentDescription, 4> attachments = { positionAttachment, normalAttachment, uvAttachment, depthAttachment };
 
             vk::RenderPassCreateInfo renderpassInfo({}, static_cast<uint32_t>(attachments.size()), attachments.data(), 1, &subpass, 1, &dependency);
 
@@ -274,9 +289,10 @@ namespace vg
             // no blending needed
             vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE); // standard values for blending.
             colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
-
+            //vk::PipelineColorBlendAttachmentState uvBlendAttachment(VK_FALSE); // if blending is ON, this is needed
+            //uvBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG);
             // we need 2 blend attachments for 2 framebuffer attachments
-            std::array<vk::PipelineColorBlendAttachmentState, 2> blendAttachments = { colorBlendAttachment, colorBlendAttachment };
+            std::array<vk::PipelineColorBlendAttachmentState, 3> blendAttachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
             // standard values for now
             vk::PipelineColorBlendStateCreateInfo colorBlending({}, VK_FALSE, vk::LogicOp::eCopy, blendAttachments.size(), blendAttachments.data(),
                 std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f});
@@ -306,10 +322,8 @@ namespace vg
         }
         
 
-        void    createGBufferResources()
+        void createGBufferResources()
         {
-            // TODO this only creates ONE attachment (e.g. only normals). Do this again for, e.g., positions
-
             // create images
             const auto ext = m_context.getSwapChainExtent();
             for(size_t i = 0; i < m_context.getSwapChainImages().size(); i++)
@@ -326,6 +340,14 @@ namespace vg
                 m_gbufferNormalImageInfos.push_back(
                     createImage(ext.width, ext.height, 1,
                         vk::Format::eR32G32B32A32Sfloat,
+                        vk::ImageTiling::eOptimal,
+                        vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+                        VMA_MEMORY_USAGE_GPU_ONLY)
+                );
+
+                m_gbufferUVImageInfos.push_back(
+                    createImage(ext.width, ext.height, 1,
+                        vk::Format::eR32G32Sfloat,
                         vk::ImageTiling::eOptimal,
                         vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
                         VMA_MEMORY_USAGE_GPU_ONLY)
@@ -348,6 +370,14 @@ namespace vg
                     { vk::ImageAspectFlagBits::eColor, 0, m_gbufferNormalImageInfos.at(i).mipLevels, 0, 1 });
                 m_gbufferNormalImageViews.push_back(m_context.getDevice().createImageView(normalViewInfo));
 
+                const vk::ImageViewCreateInfo uvViewInfo({},
+                    m_gbufferUVImageInfos.at(i).m_Image,
+                    vk::ImageViewType::e2D,
+                    vk::Format::eR32G32Sfloat,
+                    {},
+                    { vk::ImageAspectFlagBits::eColor, 0, m_gbufferUVImageInfos.at(i).mipLevels, 0, 1 });
+                m_gbufferUVImageViews.push_back(m_context.getDevice().createImageView(uvViewInfo));
+
                 // sampler
                 vk::SamplerCreateInfo samplerPosInfo({},
                     vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
@@ -364,9 +394,17 @@ namespace vg
                     static_cast<float>(m_gbufferNormalImageInfos.at(i).mipLevels),
                     vk::BorderColor::eIntOpaqueBlack, VK_FALSE);
                 m_gbufferNormalSamplers.push_back(m_context.getDevice().createSampler(samplerNormalInfo));
+
+                vk::SamplerCreateInfo samplerUVInfo({},
+                    vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
+                    vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
+                    0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f,
+                    static_cast<float>(m_gbufferUVImageInfos.at(i).mipLevels),
+                    vk::BorderColor::eIntOpaqueBlack, VK_FALSE);
+                m_gbufferUVSamplers.push_back(m_context.getDevice().createSampler(samplerUVInfo));
             }
 
-            // create depth images
+            // create depth images //TODO maybe those aren't even needed
             vk::Format depthFormat = vk::Format::eD32SfloatS8Uint;
             for(size_t i = 0; i < m_context.getSwapChainImages().size(); i++)
             {
@@ -384,7 +422,11 @@ namespace vg
             for (size_t i = 0; i < m_context.getSwapChainImages().size(); i++)
             {
                 // TODO attach missing attachments (pos, normal, geometry ID, ...)
-                std::array<vk::ImageView, 3> attachments = { m_gbufferPositionImageViews.at(i), m_gbufferNormalImageViews.at(i), m_gbufferDepthImageViews.at(i) }; //TODO what depth image to use?
+                std::array<vk::ImageView, 4> attachments = {
+                    m_gbufferPositionImageViews.at(i),
+                    m_gbufferNormalImageViews.at(i),
+                    m_gbufferUVImageViews.at(i),
+                    m_gbufferDepthImageViews.at(i) }; //TODO what depth image to use?
 
                 vk::FramebufferCreateInfo framebufferInfo({}, m_gbufferRenderpass,
                     static_cast<uint32_t>(attachments.size()), attachments.data(),
@@ -524,8 +566,14 @@ namespace vg
             vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImages.size()), vk::ShaderStageFlagBits::eFragment, nullptr);
             vk::DescriptorSetLayoutBinding positionTextureBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
             vk::DescriptorSetLayoutBinding normalTextureBinding(3, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
+            vk::DescriptorSetLayoutBinding uvTextureBinding(4, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
 
-            std::array<vk::DescriptorSetLayoutBinding, 4> bindings = { perMeshInformationIndirectDrawSSBOLB, allTexturesLayoutBinding, positionTextureBinding, normalTextureBinding };
+            std::array<vk::DescriptorSetLayoutBinding, 5> bindings = {
+                perMeshInformationIndirectDrawSSBOLB,
+                allTexturesLayoutBinding,
+                positionTextureBinding,
+                normalTextureBinding,
+                uvTextureBinding };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
@@ -535,7 +583,7 @@ namespace vg
 
             vk::DescriptorPoolSize perMeshInformationIndirectDrawSSBO(vk::DescriptorType::eStorageBuffer, 1);
             vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, m_allImageSamplers.size());
-            vk::DescriptorPoolSize gbufferImages(vk::DescriptorType::eCombinedImageSampler,2);
+            vk::DescriptorPoolSize gbufferImages(vk::DescriptorType::eCombinedImageSampler,3);
 
 
             std::array<vk::DescriptorPoolSize, 3> poolSizes = { perMeshInformationIndirectDrawSSBO, poolSizeAllImages, gbufferImages };
@@ -569,8 +617,17 @@ namespace vg
                 vk::DescriptorImageInfo gbufferNormalInfo(m_gbufferNormalSamplers.at(i), m_gbufferNormalImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
                 vk::WriteDescriptorSet descWriteGBufferNormal(m_fullScreenLightingDescriptorSets.at(i), 3, 0, 1, vk::DescriptorType::eCombinedImageSampler, &gbufferNormalInfo, nullptr, nullptr);
 
+                vk::DescriptorImageInfo gbufferUVInfo(m_gbufferUVSamplers.at(i), m_gbufferUVImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
+                vk::WriteDescriptorSet descWriteGBufferUV(m_fullScreenLightingDescriptorSets.at(i), 4, 0, 1, vk::DescriptorType::eCombinedImageSampler, &gbufferUVInfo, nullptr, nullptr);
 
-                std::array<vk::WriteDescriptorSet, 4> descriptorWrites = { descWritePerMeshInfo, descWriteAllImages, descWriteGBufferPos, descWriteGBufferNormal };
+
+                std::array<vk::WriteDescriptorSet, 5> descriptorWrites = { 
+                    descWritePerMeshInfo, 
+                    descWriteAllImages,
+                    descWriteGBufferPos,
+                    descWriteGBufferNormal,
+                    descWriteGBufferUV };
+
                 m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
             }
         
@@ -578,19 +635,30 @@ namespace vg
 
         void createSceneInformation(const char * foldername)
         {
-			// load all images
-			std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedDiffuseTexturePaths().size());
+            m_context.getLogger()->info("Loading Textures...");
+            // load all images
+            std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedDiffuseTexturePaths().size() + m_scene.getIndexedSpecularTexturePaths().size());
             stbi_set_flip_vertically_on_load(true);
 
 #pragma omp parallel for
-			for (int i = 0; i < m_scene.getIndexedDiffuseTexturePaths().size(); i++)
-			{
+            for (int i = 0; i < static_cast<int>(m_scene.getIndexedDiffuseTexturePaths().size()); i++)
+            {
                 auto path = g_resourcesPath;
                 const auto name = std::string(std::string(foldername) + m_scene.getIndexedDiffuseTexturePaths().at(i).second);
                 path.append(name);
                 loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
                 loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
-			}
+            }
+
+#pragma omp parallel for
+            for (int i = static_cast<int>(m_scene.getIndexedDiffuseTexturePaths().size()); i < static_cast<int>(loadedImages.size()); i++)
+            {
+                auto path = g_resourcesPath;
+                const auto name = std::string(std::string(foldername) + m_scene.getIndexedSpecularTexturePaths().at(i - m_scene.getIndexedDiffuseTexturePaths().size()).second);
+                path.append(name);
+                loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
+                loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
+            }
 
             for (const auto& ili : loadedImages)
             {
@@ -610,6 +678,8 @@ namespace vg
                 m_allImageSamplers.push_back(m_context.getDevice().createSampler(samplerInfo));
 
             }
+
+            m_context.getLogger()->info("Texture loading complete.");
         }
 
         void createVertexBuffer()
@@ -782,7 +852,7 @@ namespace vg
 
             // 1st renderpass: render into g-buffer
             vk::ClearValue clearValue(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
-            std::array<vk::ClearValue, 3> clearColors = { clearValue, clearValue, vk::ClearDepthStencilValue{1.0f, 0} };
+            std::array<vk::ClearValue, 4> clearColors = { clearValue, clearValue, clearValue, vk::ClearDepthStencilValue{1.0f, 0} };
             vk::RenderPassBeginInfo renderpassInfo(m_gbufferRenderpass, m_gbufferFramebuffers.at(currentImage), { {0, 0}, m_context.getSwapChainExtent() }, static_cast<uint32_t>(clearColors.size()), clearColors.data());
             m_commandBuffers.at(currentImage).beginRenderPass(renderpassInfo, vk::SubpassContents::eSecondaryCommandBuffers);
 
@@ -910,12 +980,18 @@ namespace vg
         // G-Buffer Resources
         std::vector<ImageInfo> m_gbufferPositionImageInfos;
         std::vector<ImageInfo> m_gbufferNormalImageInfos;
+        std::vector<ImageInfo> m_gbufferUVImageInfos;
+
 
         std::vector<vk::ImageView> m_gbufferPositionImageViews;
         std::vector<vk::ImageView> m_gbufferNormalImageViews;
+        std::vector<vk::ImageView> m_gbufferUVImageViews;
+
 
         std::vector<vk::Sampler> m_gbufferPositionSamplers;
         std::vector<vk::Sampler> m_gbufferNormalSamplers;
+        std::vector<vk::Sampler> m_gbufferUVSamplers;
+
 
         std::vector<ImageInfo> m_gbufferDepthImages;
         std::vector<vk::ImageView> m_gbufferDepthImageViews;
