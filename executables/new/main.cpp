@@ -39,7 +39,7 @@ namespace vg
             createCommandPools();
 
             createDepthResources();
-            createFramebuffers();
+            createSwapchainFramebuffers(m_renderpass);
 
             m_image = createTextureImage("chalet/chalet.jpg");
             m_textureImageMipLevels = m_image.mipLevels;
@@ -271,7 +271,7 @@ namespace vg
             createRenderPass();
             createGraphicsPipeline();
             createDepthResources();
-            createFramebuffers();
+            createSwapchainFramebuffers(m_renderpass);
             createCommandBuffers();
         }
 
@@ -521,6 +521,9 @@ namespace vg
         }
 
     private:
+
+        vk::RenderPass m_renderpass;
+
         vk::DescriptorSetLayout m_descriptorSetLayout;
 
         vk::PipelineLayout m_pipelineLayout;

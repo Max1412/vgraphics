@@ -70,7 +70,7 @@ namespace vg
 
         void endSingleTimeCommands(vk::CommandBuffer commandBuffer, vk::Queue queue, vk::CommandPool commandPool, const SemaphoreInfos& si = {}) const;
 
-        void createFramebuffers();
+        void createSwapchainFramebuffers(const vk::RenderPass& renderpass);
 
         void createCommandPools();
 
@@ -102,8 +102,6 @@ namespace vg
     protected:
 
         Context m_context;
-
-        vk::RenderPass m_renderpass;
 
         std::vector<vk::Semaphore> m_imageAvailableSemaphores;
         std::vector<vk::Semaphore> m_graphicsRenderFinishedSemaphores;

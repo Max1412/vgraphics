@@ -79,14 +79,14 @@ namespace vg
         m_context.getDevice().freeCommandBuffers(commandPool, commandBuffer);
     }
 
-    void BaseApp::createFramebuffers()
+    void BaseApp::createSwapchainFramebuffers(const vk::RenderPass& renderpass)
     {
         m_swapChainFramebuffers.resize(m_context.getSwapChainImageViews().size());
         for (size_t i = 0; i < m_context.getSwapChainImageViews().size(); i++)
         {
             std::array<vk::ImageView, 2> attachments = { m_context.getSwapChainImageViews().at(i), m_depthImageView };
 
-            vk::FramebufferCreateInfo framebufferInfo({}, m_renderpass,
+            vk::FramebufferCreateInfo framebufferInfo({}, renderpass,
                 static_cast<uint32_t>(attachments.size()), attachments.data(),
                 m_context.getSwapChainExtent().width,
                 m_context.getSwapChainExtent().height,
@@ -195,6 +195,8 @@ namespace vg
             reinterpret_cast<VkImageCreateInfo*>(&createInfo), &allocInfo,
             reinterpret_cast<VkImage*>(&returnInfo.m_Image), &returnInfo.m_ImageAllocation, &returnInfo.m_ImageAllocInfo);
 
+        returnInfo.mipLevels = mipLevels;
+        //TODO maybe check if mipLevels > 1 and then automatically generate mipmaps
         return returnInfo;
     }
 

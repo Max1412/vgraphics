@@ -44,7 +44,7 @@ namespace vg
             createGraphicsPipeline();
 
             createDepthResources();
-            createFramebuffers();
+            createSwapchainFramebuffers(m_renderpass);
 
 
             createVertexBuffer();
@@ -259,7 +259,7 @@ namespace vg
             createRenderPass();
             createGraphicsPipeline();
             createDepthResources();
-            createFramebuffers();
+            createSwapchainFramebuffers(m_renderpass);
             createAllCommandBuffers();
         }
 
@@ -576,6 +576,9 @@ namespace vg
         }
 
     private:
+
+        vk::RenderPass m_renderpass;
+
         vk::DescriptorSetLayout m_descriptorSetLayout;
 
         vk::PipelineLayout m_pipelineLayout;

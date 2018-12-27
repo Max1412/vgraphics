@@ -35,7 +35,7 @@ namespace vg
             createCommandPools();
 
             createDepthResources();
-            createFramebuffers();
+            createSwapchainFramebuffers(m_renderpass);
 
             createCommandBuffers();
             createSyncObjects();
@@ -88,7 +88,7 @@ namespace vg
             createRenderPass();
             createGraphicsPipeline();
             createDepthResources();
-            createFramebuffers();
+            createSwapchainFramebuffers(m_renderpass);
             createCommandBuffers();
         }
 
@@ -285,6 +285,8 @@ namespace vg
     private:
         vk::PipelineLayout m_pipelineLayout;
         vk::Pipeline m_graphicsPipeline;
+        vk::RenderPass m_renderpass;
+
     };
 }
 
