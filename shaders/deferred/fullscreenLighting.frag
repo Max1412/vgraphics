@@ -28,12 +28,25 @@ layout(constant_id = 0) const int NUM_TEXTURES = 64;
 layout(set = 0, binding = 1) uniform sampler2D allTextures[NUM_TEXTURES];
 layout(set = 0, binding = 2) uniform sampler2D gbufferPositionSampler;
 layout(set = 0, binding = 3) uniform sampler2D gbufferNormalSampler;
-layout(set = 0, binding = 3) uniform sampler2D gbufferUVSampler;
+layout(set = 0, binding = 4) uniform sampler2D gbufferUVSampler;
 
 
 void main() 
 {
     //TODO do shading here
     //outColor = texture(gbufferPositionSampler, inUV);
-    outColor = vec4(texture(gbufferUVSampler, inUV).xy, 0.0, 1.0);
+    vec4 posAndID = texture(gbufferPositionSampler, inUV);
+    vec3 pos = posAndID.xyz;
+    int drawID = int(posAndID.w);
+
+    // ID -1 means no geometry (background)
+    if(drawID == -1) discard;
+
+    vec3 normal = normalize(texture(gbufferNormalSampler, inUV).xyz);
+    PerMeshInfo currentMeshInfo = perMeshInfos.perMesh[drawID];
+    vec4 uvLOD = texture(gbufferUVSampler, inUV);
+    vec4 specTex = textureLod(allTextures[currentMeshInfo.texSpecIndex], uvLOD.xy, uvLOD.w);
+    vec4 diffTex = textureLod(allTextures[currentMeshInfo.texIndex], uvLOD.xy, uvLOD.w);
+
+    outColor = diffTex;
 }

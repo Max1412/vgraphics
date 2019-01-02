@@ -173,7 +173,7 @@ namespace vg
 
             vk::AttachmentReference normalAttachmentRef(1, vk::ImageLayout::eColorAttachmentOptimal);
 
-            vk::AttachmentDescription uvAttachment({}, vk::Format::eR32G32Sfloat, //TODO use saved format, not hard-coded
+            vk::AttachmentDescription uvAttachment({}, vk::Format::eR32G32B32A32Sfloat, //TODO use saved format, not hard-coded
                 vk::SampleCountFlagBits::e1,
                 vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,            // load store op
                 vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
@@ -200,7 +200,7 @@ namespace vg
 
             vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics,
                 0, nullptr,                 // input attachments (standard values)
-                colorAttachmentRefs.size(), colorAttachmentRefs.data(),     // color attachments: layout (location = 0) out -> colorAttachmentRef is at index 0
+                static_cast<uint32_t>(colorAttachmentRefs.size()), colorAttachmentRefs.data(),     // color attachments: layout (location = 0) out -> colorAttachmentRef is at index 0
                 nullptr,                    // no resolve attachment
                 &depthAttachmentRef);       // depth stencil attachment
                                             // other attachment at standard values: Preserved
@@ -223,17 +223,21 @@ namespace vg
 
             // inputs //TODO maybe put model-matrix in per-mesh buffer
             vk::DescriptorSetLayoutBinding modelMatrixSSBOLayoutBinding(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
+            vk::DescriptorSetLayoutBinding perMeshInformationIndirectDrawSSBOLB(2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
+            vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImages.size()), vk::ShaderStageFlagBits::eFragment, nullptr);
 
-            std::array<vk::DescriptorSetLayoutBinding, 1> bindings = { modelMatrixSSBOLayoutBinding };
+            std::array<vk::DescriptorSetLayoutBinding, 3> bindings = { modelMatrixSSBOLayoutBinding, perMeshInformationIndirectDrawSSBOLB, allTexturesLayoutBinding };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
             m_gbufferDescriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
 
             // 2: create descriptor pool
-
+            vk::DescriptorPoolSize perMeshInformationIndirectDrawSSBO(vk::DescriptorType::eStorageBuffer, 1);
             vk::DescriptorPoolSize poolSizemodelMatrixSSBO(vk::DescriptorType::eStorageBuffer, 1);
-            std::array<vk::DescriptorPoolSize, 1> poolSizes = { poolSizemodelMatrixSSBO };
+            vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImageSamplers.size()));
+
+            std::array<vk::DescriptorPoolSize, 3> poolSizes = { perMeshInformationIndirectDrawSSBO, poolSizemodelMatrixSSBO, poolSizeAllImages };
 
             vk::DescriptorPoolCreateInfo poolInfo({}, 1, static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
 
@@ -247,8 +251,17 @@ namespace vg
             // model matrix buffer
             vk::DescriptorBufferInfo bufferInfo(m_modelMatrixBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
             vk::WriteDescriptorSet descWrite(m_gbufferDescriptorSets.at(0), 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &bufferInfo, nullptr);
+            vk::DescriptorBufferInfo perMeshInformationIndirectDrawSSBOInfo(m_indirectDrawBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
+            vk::WriteDescriptorSet descWritePerMeshInfo(m_gbufferDescriptorSets.at(0), 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &perMeshInformationIndirectDrawSSBOInfo, nullptr);
 
-            std::array<vk::WriteDescriptorSet, 1> descriptorWrites = { descWrite };
+            std::vector<vk::DescriptorImageInfo> allImageInfos;
+            for (int i = 0; i < m_allImages.size(); i++)
+            {
+                allImageInfos.emplace_back(m_allImageSamplers.at(i), m_allImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
+            }
+            vk::WriteDescriptorSet descWriteAllImages(m_gbufferDescriptorSets.at(0), 1, 0, static_cast<uint32_t>(m_allImages.size()), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
+
+            std::array<vk::WriteDescriptorSet, 3> descriptorWrites = { descWrite, descWriteAllImages, descWritePerMeshInfo };
             m_context.getDevice().updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
         }
 
@@ -260,8 +273,13 @@ namespace vg
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
 
+            // specialization constant for the number of textures
+            vk::SpecializationMapEntry mapEntry(0, 0, sizeof(int32_t));
+            int32_t numTextures = static_cast<int32_t>(m_allImages.size());
+            vk::SpecializationInfo numTexturesSpecInfo(1, &mapEntry, sizeof(int32_t), &numTextures);
+
             const vk::PipelineShaderStageCreateInfo vertShaderStageInfo({}, vk::ShaderStageFlagBits::eVertex, vertShaderModule, "main");
-            const vk::PipelineShaderStageCreateInfo fragShaderStageInfo({}, vk::ShaderStageFlagBits::eFragment, fragShaderModule, "main");
+            const vk::PipelineShaderStageCreateInfo fragShaderStageInfo({}, vk::ShaderStageFlagBits::eFragment, fragShaderModule, "main", &numTexturesSpecInfo);
 
             const vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
@@ -270,7 +288,7 @@ namespace vg
             vk::PipelineVertexInputStateCreateInfo vertexInputInfo({}, 1, &bindingDescription,
                 static_cast<uint32_t>(attributeDescriptions.size()), attributeDescriptions.data());
 
-            vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);
+            vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleList, false);
 
             vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(m_context.getWidth()), static_cast<float>(m_context.getHeight()), 0.0f, 1.0f);
 
@@ -278,23 +296,24 @@ namespace vg
 
             vk::PipelineViewportStateCreateInfo viewportState({}, 1, &viewport, 1, &scissor);
 
-            vk::PipelineRasterizationStateCreateInfo rasterizer({}, VK_FALSE, VK_FALSE,
+            vk::PipelineRasterizationStateCreateInfo rasterizer({}, false, false,
                 vk::PolygonMode::eFill, vk::CullModeFlagBits::eBack, vk::FrontFace::eCounterClockwise,
-                VK_FALSE, 0, 0, 0, 1.0f);
+                false, 0, 0, 0, 1.0f);
 
-            vk::PipelineMultisampleStateCreateInfo multisampling({}, vk::SampleCountFlagBits::e1, VK_FALSE);
+            vk::PipelineMultisampleStateCreateInfo multisampling({}, vk::SampleCountFlagBits::e1, false);
 
-            vk::PipelineDepthStencilStateCreateInfo depthStencil({}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess);
+            vk::PipelineDepthStencilStateCreateInfo depthStencil({}, true, true, vk::CompareOp::eLess);
 
             // no blending needed
-            vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE); // standard values for blending.
+            vk::PipelineColorBlendAttachmentState colorBlendAttachment(false); // standard values for blending.
             colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
-            //vk::PipelineColorBlendAttachmentState uvBlendAttachment(VK_FALSE); // if blending is ON, this is needed
+            //vk::PipelineColorBlendAttachmentState uvBlendAttachment(false); // if blending is ON, this is needed
             //uvBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG);
             // we need 2 blend attachments for 2 framebuffer attachments
             std::array<vk::PipelineColorBlendAttachmentState, 3> blendAttachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
             // standard values for now
-            vk::PipelineColorBlendStateCreateInfo colorBlending({}, VK_FALSE, vk::LogicOp::eCopy, blendAttachments.size(), blendAttachments.data(),
+            vk::PipelineColorBlendStateCreateInfo colorBlending({}, false, vk::LogicOp::eCopy,
+                static_cast<uint32_t>(blendAttachments.size()), blendAttachments.data(),
                 std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f});
 
             // no dynamic state needed
@@ -347,7 +366,7 @@ namespace vg
 
                 m_gbufferUVImageInfos.push_back(
                     createImage(ext.width, ext.height, 1,
-                        vk::Format::eR32G32Sfloat,
+                        vk::Format::eR32G32B32A32Sfloat,
                         vk::ImageTiling::eOptimal,
                         vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
                         VMA_MEMORY_USAGE_GPU_ONLY)
@@ -373,34 +392,34 @@ namespace vg
                 const vk::ImageViewCreateInfo uvViewInfo({},
                     m_gbufferUVImageInfos.at(i).m_Image,
                     vk::ImageViewType::e2D,
-                    vk::Format::eR32G32Sfloat,
+                    vk::Format::eR32G32B32A32Sfloat,
                     {},
                     { vk::ImageAspectFlagBits::eColor, 0, m_gbufferUVImageInfos.at(i).mipLevels, 0, 1 });
                 m_gbufferUVImageViews.push_back(m_context.getDevice().createImageView(uvViewInfo));
 
                 // sampler
                 vk::SamplerCreateInfo samplerPosInfo({},
-                    vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
+                    vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
                     vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
-                    0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f,
+                    0.0f, true, 1.0f, false, vk::CompareOp::eAlways, 0.0f,
                     static_cast<float>(m_gbufferPositionImageInfos.at(i).mipLevels),
-                    vk::BorderColor::eIntOpaqueBlack, VK_FALSE);
+                    vk::BorderColor::eIntOpaqueBlack, false);
                 m_gbufferPositionSamplers.push_back(m_context.getDevice().createSampler(samplerPosInfo));
 
                 vk::SamplerCreateInfo samplerNormalInfo({},
-                    vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
+                    vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
                     vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
-                    0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f,
+                    0.0f, true, 1.0f, false, vk::CompareOp::eAlways, 0.0f,
                     static_cast<float>(m_gbufferNormalImageInfos.at(i).mipLevels),
-                    vk::BorderColor::eIntOpaqueBlack, VK_FALSE);
+                    vk::BorderColor::eIntOpaqueBlack, false);
                 m_gbufferNormalSamplers.push_back(m_context.getDevice().createSampler(samplerNormalInfo));
 
                 vk::SamplerCreateInfo samplerUVInfo({},
-                    vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
+                    vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
                     vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
-                    0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f,
+                    0.0f, true, 1.0f, false, vk::CompareOp::eAlways, 0.0f,
                     static_cast<float>(m_gbufferUVImageInfos.at(i).mipLevels),
-                    vk::BorderColor::eIntOpaqueBlack, VK_FALSE);
+                    vk::BorderColor::eIntOpaqueBlack, false);
                 m_gbufferUVSamplers.push_back(m_context.getDevice().createSampler(samplerUVInfo));
             }
 
@@ -500,7 +519,7 @@ namespace vg
 
             // everything else is standard
 
-            vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleList, VK_FALSE);
+            vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleList, false);
 
             vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(m_context.getWidth()), static_cast<float>(m_context.getHeight()), 0.0f, 1.0f);
 
@@ -508,20 +527,20 @@ namespace vg
 
             vk::PipelineViewportStateCreateInfo viewportState({}, 1, &viewport, 1, &scissor);
 
-            vk::PipelineRasterizationStateCreateInfo rasterizer({}, VK_FALSE, VK_FALSE,
+            vk::PipelineRasterizationStateCreateInfo rasterizer({}, false, false,
                 vk::PolygonMode::eFill, vk::CullModeFlagBits::eFront, vk::FrontFace::eCounterClockwise,
-                VK_FALSE, 0, 0, 0, 1.0f);
+                false, 0, 0, 0, 1.0f);
 
-            vk::PipelineMultisampleStateCreateInfo multisampling({}, vk::SampleCountFlagBits::e1, VK_FALSE);
+            vk::PipelineMultisampleStateCreateInfo multisampling({}, vk::SampleCountFlagBits::e1, false);
 
-            vk::PipelineDepthStencilStateCreateInfo depthStencil({}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess);
+            vk::PipelineDepthStencilStateCreateInfo depthStencil({}, true, true, vk::CompareOp::eLess);
 
             // no blending needed
-            vk::PipelineColorBlendAttachmentState colorBlendAttachment(VK_FALSE); // standard values for blending.
+            vk::PipelineColorBlendAttachmentState colorBlendAttachment(false); // standard values for blending.
             colorBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
 
             // standard values for now
-            vk::PipelineColorBlendStateCreateInfo colorBlending({}, VK_FALSE, vk::LogicOp::eCopy, 1, &colorBlendAttachment,
+            vk::PipelineColorBlendStateCreateInfo colorBlending({}, false, vk::LogicOp::eCopy, 1, &colorBlendAttachment,
                 std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f});
 
 
@@ -582,13 +601,13 @@ namespace vg
             // 2: create descriptor pool
 
             vk::DescriptorPoolSize perMeshInformationIndirectDrawSSBO(vk::DescriptorType::eStorageBuffer, 1);
-            vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, m_allImageSamplers.size());
+            vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImageSamplers.size()));
             vk::DescriptorPoolSize gbufferImages(vk::DescriptorType::eCombinedImageSampler,3);
 
 
             std::array<vk::DescriptorPoolSize, 3> poolSizes = { perMeshInformationIndirectDrawSSBO, poolSizeAllImages, gbufferImages };
 
-            vk::DescriptorPoolCreateInfo poolInfo({}, m_swapChainFramebuffers.size(), static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
+            vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(m_swapChainFramebuffers.size()), static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
 
             m_fullScreenLightingDescriptorPool = m_context.getDevice().createDescriptorPool(poolInfo);
 
@@ -673,7 +692,7 @@ namespace vg
                 vk::SamplerCreateInfo samplerInfo({},
                     vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear,
                     vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
-                    0.0f, VK_TRUE, 16.0f, VK_FALSE, vk::CompareOp::eAlways, 0.0f, static_cast<float>(imageInfo.mipLevels), vk::BorderColor::eIntOpaqueBlack, VK_FALSE
+                    0.0f, true, 16.0f, false, vk::CompareOp::eAlways, 0.0f, static_cast<float>(imageInfo.mipLevels), vk::BorderColor::eIntOpaqueBlack, false
                 );
                 m_allImageSamplers.push_back(m_context.getDevice().createSampler(samplerInfo));
 
@@ -851,8 +870,10 @@ namespace vg
             m_commandBuffers.at(currentImage).begin(beginInfo);
 
             // 1st renderpass: render into g-buffer
+            vk::ClearValue clearPosID(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, -1.0f });
             vk::ClearValue clearValue(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
-            std::array<vk::ClearValue, 4> clearColors = { clearValue, clearValue, clearValue, vk::ClearDepthStencilValue{1.0f, 0} };
+
+            std::array<vk::ClearValue, 4> clearColors = { clearPosID, clearValue, clearValue, vk::ClearDepthStencilValue{1.0f, 0} };
             vk::RenderPassBeginInfo renderpassInfo(m_gbufferRenderpass, m_gbufferFramebuffers.at(currentImage), { {0, 0}, m_context.getSwapChainExtent() }, static_cast<uint32_t>(clearColors.size()), clearColors.data());
             m_commandBuffers.at(currentImage).beginRenderPass(renderpassInfo, vk::SubpassContents::eSecondaryCommandBuffers);
 
