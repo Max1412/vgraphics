@@ -25,6 +25,14 @@ struct PerMeshInfo : vk::DrawIndexedIndirectCommand
     int assimpMaterialIndex = -1;
 };
 
+struct MaterialInfo
+{
+    glm::vec3 diffColor;
+    int32_t pad = -1;
+    glm::vec3 specColor;
+    float N = -1.0;
+};
+
 
 class Scene
 {
@@ -38,6 +46,8 @@ public:
     const std::vector<std::pair<std::vector<unsigned>, std::string>>& getIndexedDiffuseTexturePaths() const { return m_indexedDiffuseTexturePaths;  }
 	const std::vector<std::pair<std::vector<unsigned>, std::string>>& getIndexedSpecularTexturePaths() const { return m_indexedSpecularTexturePaths; }
 
+    const std::vector<MaterialInfo>& getMaterials() const { return m_allMaterials; }
+
 private:
     std::vector<uint32_t> m_allIndices;
     std::vector<vg::VertexPosUvNormal> m_allVertices;
@@ -50,4 +60,5 @@ private:
     std::vector<std::pair<std::vector<unsigned>, std::string>> m_indexedDiffuseTexturePaths;
 	std::vector<std::pair<std::vector<unsigned>, std::string>> m_indexedSpecularTexturePaths;
 
+    std::vector<MaterialInfo> m_allMaterials;
 };

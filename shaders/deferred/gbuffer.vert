@@ -27,5 +27,5 @@ void main()
     fragTexCoord = inTexCoord;
     drawID = gl_DrawID;
     passNormal = inNormal;
-    passWorldPos = inPosition;
+    passWorldPos = vec3(mms.model[gl_DrawID] * vec4(inPosition, 1.0));
 }

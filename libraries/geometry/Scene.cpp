@@ -98,6 +98,7 @@ Scene::Scene(const std::filesystem::path& filename)
     }
 
 	m_modelMatrices = std::vector<glm::mat4>(m_meshes.size(), glm::mat4(1.0f));
+    m_allMaterials = std::vector<MaterialInfo>(m_meshes.size(), MaterialInfo());
 
     // accumulate all hierarchical transformations to model matrices
     const auto root = scene->mRootNode;
@@ -184,11 +185,17 @@ Scene::Scene(const std::filesystem::path& filename)
 	        }
         }
 
+        // other material info
 		aiColor3D diffColor;
     	mat->Get(AI_MATKEY_COLOR_DIFFUSE, diffColor);
+        m_allMaterials.at(i).diffColor = reinterpret_cast<glm::vec3&>(diffColor);
 
 		aiColor3D specColor;
 		mat->Get(AI_MATKEY_COLOR_SPECULAR, specColor);
+        m_allMaterials.at(i).specColor = reinterpret_cast<glm::vec3&>(specColor);
+
+        mat->Get(AI_MATKEY_SHININESS, m_allMaterials.at(i).N);
+        
     }
 
 
@@ -214,6 +221,7 @@ Scene::Scene(const std::filesystem::path& filename)
 
 		uniqueSpecTexIndex++;
 	}
+
 
     
     importer.FreeScene();

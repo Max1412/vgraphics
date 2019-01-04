@@ -24,6 +24,7 @@
 #include "imgui/imgui_impl_glfw.h"
 #include "utility/Timer.h"
 #include "stb/stb_image.h"
+#include "geometry/lightmanager.h"
 
 namespace vg
 {
@@ -34,12 +35,12 @@ namespace vg
         DeferredApp() :
     		BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters" }),
     		m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
-			m_scene("Sponza/sponza.obj")
+			m_scene("San_Miguel/san-miguel-low-poly.obj")
 		{
             //createRenderPass();
 
             createCommandPools();
-            createSceneInformation("Sponza/");
+            createSceneInformation("San_Miguel/");
 
             createDepthResources();
 
@@ -53,6 +54,11 @@ namespace vg
             createIndexBuffer();
             createIndirectDrawBuffer();
             createPerGeometryBuffers();
+            createMaterialBuffer();
+
+            createCombinedDescriptorPool();
+
+            createLightStuff();
 
             createGBufferDescriptors();
             createFullscreenLightingDescriptors();
@@ -79,6 +85,10 @@ namespace vg
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indexBufferInfo.m_Buffer), m_indexBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_vertexBufferInfo.m_Buffer), m_vertexBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indirectDrawBufferInfo.m_Buffer), m_indirectDrawBufferInfo.m_BufferAllocation);
+
+            for(const auto& buffer : m_lightBufferInfos)
+                vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(buffer.m_Buffer), buffer.m_BufferAllocation);
+
 
             m_context.getDevice().destroyImageView(m_depthImageView);
             vmaDestroyImage(m_context.getAllocator(), m_depthImage.m_Image, m_depthImage.m_ImageAllocation);
@@ -133,11 +143,11 @@ namespace vg
             for (const auto& image : m_gbufferDepthImages)
                 vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
 
-            m_context.getDevice().destroyDescriptorPool(m_gbufferDescriptorPool);
-            m_context.getDevice().destroyDescriptorPool(m_fullScreenLightingDescriptorPool);
+            m_context.getDevice().destroyDescriptorPool(m_combinedDescriptorPool);
 
             m_context.getDevice().destroyDescriptorSetLayout(m_gbufferDescriptorSetLayout);
             m_context.getDevice().destroyDescriptorSetLayout(m_fullScreenLightingDescriptorSetLayout);
+            m_context.getDevice().destroyDescriptorSetLayout(m_lightDescriptorSetLayout);
 
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_modelMatrixBufferInfo.m_Buffer), m_modelMatrixBufferInfo.m_BufferAllocation);
 
@@ -213,6 +223,20 @@ namespace vg
 
         }
 
+        void createCombinedDescriptorPool()
+        {
+            // 2: create descriptor pool
+            vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImageSamplers.size()));
+            vk::DescriptorPoolSize poolSizeForSSBOs(vk::DescriptorType::eStorageBuffer, 7);
+            vk::DescriptorPoolSize gbufferImages(vk::DescriptorType::eCombinedImageSampler, 3);
+
+            std::array<vk::DescriptorPoolSize, 3> poolSizes = { poolSizeForSSBOs, gbufferImages, poolSizeAllImages };
+
+
+            vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(m_swapChainFramebuffers.size()) + 2, static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
+
+            m_combinedDescriptorPool = m_context.getDevice().createDescriptorPool(poolInfo);
+        }
 
 
         void createGBufferDescriptors()
@@ -232,20 +256,11 @@ namespace vg
 
             m_gbufferDescriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
 
-            // 2: create descriptor pool
-            vk::DescriptorPoolSize perMeshInformationIndirectDrawSSBO(vk::DescriptorType::eStorageBuffer, 1);
-            vk::DescriptorPoolSize poolSizemodelMatrixSSBO(vk::DescriptorType::eStorageBuffer, 1);
-            vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImageSamplers.size()));
-
-            std::array<vk::DescriptorPoolSize, 3> poolSizes = { perMeshInformationIndirectDrawSSBO, poolSizemodelMatrixSSBO, poolSizeAllImages };
-
-            vk::DescriptorPoolCreateInfo poolInfo({}, 1, static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
-
-            m_gbufferDescriptorPool = m_context.getDevice().createDescriptorPool(poolInfo);
+            
 
             // 3: create descriptor set
 
-            vk::DescriptorSetAllocateInfo allocInfo(m_gbufferDescriptorPool, 1, &m_gbufferDescriptorSetLayout);
+            vk::DescriptorSetAllocateInfo allocInfo(m_combinedDescriptorPool, 1, &m_gbufferDescriptorSetLayout);
             m_gbufferDescriptorSets = m_context.getDevice().allocateDescriptorSets(allocInfo);
 
             // model matrix buffer
@@ -322,7 +337,7 @@ namespace vg
 
             // push view & proj matrix
             std::array<vk::PushConstantRange, 1> vpcr = {
-                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, 2 * sizeof(glm::mat4)},
+                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4)},
             };
 
             vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, 1, &m_gbufferDescriptorSetLayout, static_cast<uint32_t>(vpcr.size()), vpcr.data());
@@ -547,10 +562,12 @@ namespace vg
 
             // push view & proj matrix
             std::array<vk::PushConstantRange, 1> vpcr = {
-                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, 2 * sizeof(glm::mat4)},
+                // view & proj (mat4) + pos (vec4)
+                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4)}
             };
 
-            vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, 1, &m_fullScreenLightingDescriptorSetLayout, static_cast<uint32_t>(vpcr.size()), vpcr.data());
+            std::array<vk::DescriptorSetLayout, 2> dsls = { m_fullScreenLightingDescriptorSetLayout, m_lightDescriptorSetLayout};
+            vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, dsls.size(), dsls.data(), static_cast<uint32_t>(vpcr.size()), vpcr.data());
 
             m_fullscreenLightingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutInfo);
 
@@ -586,34 +603,26 @@ namespace vg
             vk::DescriptorSetLayoutBinding positionTextureBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
             vk::DescriptorSetLayoutBinding normalTextureBinding(3, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
             vk::DescriptorSetLayoutBinding uvTextureBinding(4, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
+            vk::DescriptorSetLayoutBinding materialSSBOBinding(5, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
 
-            std::array<vk::DescriptorSetLayoutBinding, 5> bindings = {
+            std::array<vk::DescriptorSetLayoutBinding, 6> bindings = {
                 perMeshInformationIndirectDrawSSBOLB,
                 allTexturesLayoutBinding,
                 positionTextureBinding,
                 normalTextureBinding,
-                uvTextureBinding };
+                uvTextureBinding,
+                materialSSBOBinding
+            };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
             m_fullScreenLightingDescriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
 
-            // 2: create descriptor pool
 
-            vk::DescriptorPoolSize perMeshInformationIndirectDrawSSBO(vk::DescriptorType::eStorageBuffer, 1);
-            vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImageSamplers.size()));
-            vk::DescriptorPoolSize gbufferImages(vk::DescriptorType::eCombinedImageSampler,3);
-
-
-            std::array<vk::DescriptorPoolSize, 3> poolSizes = { perMeshInformationIndirectDrawSSBO, poolSizeAllImages, gbufferImages };
-
-            vk::DescriptorPoolCreateInfo poolInfo({}, static_cast<uint32_t>(m_swapChainFramebuffers.size()), static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
-
-            m_fullScreenLightingDescriptorPool = m_context.getDevice().createDescriptorPool(poolInfo);
 
             // create n descriptor sets, 1 for each multi-buffered gbuffer
             std::vector<vk::DescriptorSetLayout> dsls(m_swapChainFramebuffers.size(), m_fullScreenLightingDescriptorSetLayout);
-            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_fullScreenLightingDescriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), dsls.data());
+            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_combinedDescriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), dsls.data());
             m_fullScreenLightingDescriptorSets = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo);
 
 
@@ -639,13 +648,17 @@ namespace vg
                 vk::DescriptorImageInfo gbufferUVInfo(m_gbufferUVSamplers.at(i), m_gbufferUVImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
                 vk::WriteDescriptorSet descWriteGBufferUV(m_fullScreenLightingDescriptorSets.at(i), 4, 0, 1, vk::DescriptorType::eCombinedImageSampler, &gbufferUVInfo, nullptr, nullptr);
 
+                vk::DescriptorBufferInfo materialInfo(m_materialBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
+                vk::WriteDescriptorSet descWriteMaterialInfo(m_fullScreenLightingDescriptorSets.at(i), 5, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &materialInfo, nullptr);
 
-                std::array<vk::WriteDescriptorSet, 5> descriptorWrites = { 
+
+                std::array<vk::WriteDescriptorSet, 6> descriptorWrites = { 
                     descWritePerMeshInfo, 
                     descWriteAllImages,
                     descWriteGBufferPos,
                     descWriteGBufferNormal,
-                    descWriteGBufferUV };
+                    descWriteGBufferUV,
+                descWriteMaterialInfo };
 
                 m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
             }
@@ -701,6 +714,70 @@ namespace vg
             m_context.getLogger()->info("Texture loading complete.");
         }
 
+        void createLightStuff()
+        {
+            DirectionalLight dirLight;
+            dirLight.intensity = glm::vec3(15.0f);
+            dirLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
+
+            PointLight pointLight;
+            pointLight.position = glm::vec3(0.0f, 100.0f, 0.0f);
+            pointLight.intensity = glm::vec3(15.0f);
+            pointLight.constant = 0.025f;
+            pointLight.linear = 0.01f;
+            pointLight.quadratic = 0.0f;
+
+            SpotLight spotLight;
+            spotLight.position = glm::vec3(0.0f, 100.0f, 0.0f);
+            spotLight.intensity = glm::vec3(15.0f);
+            spotLight.constant = 0.025f;
+            spotLight.linear = 0.01f;
+            spotLight.quadratic = 0.0f;
+            spotLight.cutoff = 1.0f;
+            spotLight.outerCutoff = 0.75f;
+
+            m_lightManager = LightManager(std::vector<DirectionalLight>{dirLight}, std::vector<PointLight>{pointLight}, std::vector<SpotLight>{spotLight});
+
+            // create buffers for lights
+            m_lightBufferInfos.push_back(fillBufferTroughStagedTransfer(m_lightManager.getDirectionalLights(), vk::BufferUsageFlagBits::eStorageBuffer));
+            m_lightBufferInfos.push_back(fillBufferTroughStagedTransfer(m_lightManager.getPointLights(), vk::BufferUsageFlagBits::eStorageBuffer));
+            m_lightBufferInfos.push_back(fillBufferTroughStagedTransfer(m_lightManager.getSpotLights(), vk::BufferUsageFlagBits::eStorageBuffer));
+
+            // create light descriptor set layout, descriptor set
+            vk::DescriptorSetLayoutBinding dirLights(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
+            vk::DescriptorSetLayoutBinding pointLights(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
+            vk::DescriptorSetLayoutBinding spotLights(2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
+
+            std::array<vk::DescriptorSetLayoutBinding, 3> bindings = {
+                dirLights, pointLights, spotLights
+            };
+
+            vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
+
+            m_lightDescriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
+
+            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_combinedDescriptorPool, 1, &m_lightDescriptorSetLayout);
+            m_lightDescritporSet = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo).at(0);
+
+            vk::DescriptorBufferInfo dirLightsInfo(m_lightBufferInfos.at(0).m_Buffer, 0, VK_WHOLE_SIZE);
+            vk::WriteDescriptorSet descWriteDirLights(m_lightDescritporSet, 0, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &dirLightsInfo, nullptr);
+            
+            vk::DescriptorBufferInfo pointLightsInfo(m_lightBufferInfos.at(1).m_Buffer, 0, VK_WHOLE_SIZE);
+            vk::WriteDescriptorSet descWritePointLights(m_lightDescritporSet, 1, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &pointLightsInfo, nullptr);
+
+            vk::DescriptorBufferInfo spotLightsInfo(m_lightBufferInfos.at(2).m_Buffer, 0, VK_WHOLE_SIZE);
+            vk::WriteDescriptorSet descWriteSpotLights(m_lightDescritporSet, 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &spotLightsInfo, nullptr);
+
+            std::array<vk::WriteDescriptorSet, 3> descriptorWrites = {
+                descWriteDirLights,
+                descWritePointLights,
+                descWriteSpotLights,
+            };
+
+            m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
+
+        }
+
         void createVertexBuffer()
         {
             m_vertexBufferInfo = fillBufferTroughStagedTransfer(m_scene.getVertices(), vk::BufferUsageFlagBits::eVertexBuffer);
@@ -719,6 +796,11 @@ namespace vg
         void createPerGeometryBuffers()
         {
             m_modelMatrixBufferInfo = fillBufferTroughStagedTransfer(m_scene.getModelMatrices(), vk::BufferUsageFlagBits::eStorageBuffer);
+        }
+
+        void createMaterialBuffer()
+        {
+            m_materialBufferInfo = fillBufferTroughStagedTransfer(m_scene.getMaterials(), vk::BufferUsageFlagBits::eStorageBuffer);
         }
 
         void createPerFrameInformation()
@@ -830,7 +912,9 @@ namespace vg
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_fullscreenLightingPipeline);
 
                 // important: bind the descriptor set corresponding to the correct multi-buffered gbuffer resources
-                m_fullscreenLightingSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_fullscreenLightingPipelineLayout, 0, 1, &m_fullScreenLightingDescriptorSets.at(i), 0, nullptr);
+                std::array<vk::DescriptorSet, 2> descSets = { m_fullScreenLightingDescriptorSets.at(i), m_lightDescritporSet };
+                m_fullscreenLightingSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_fullscreenLightingPipelineLayout,
+                    0, descSets.size(), descSets.data(), 0, nullptr);
 
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).draw(3, 1, 0, 0);
 
@@ -849,16 +933,24 @@ namespace vg
             m_perFrameSecondaryCommandBuffers.at(currentImage).begin(beginInfo1);
 
             m_camera.update(m_context.getWindow());
-            if(m_camera.hasChanged()) // this is currently always true
-            {
-                m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_gbufferPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), glm::value_ptr(m_camera.getView()));
-                m_camera.resetChangeFlag();
-            }
-            if (m_projectionChanged)
-            {
-                m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_gbufferPipelineLayout, vk::ShaderStageFlagBits::eVertex, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(m_projection));
-                m_projectionChanged = false;
-            }
+
+            m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_gbufferPipelineLayout, 
+                vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+                0, sizeof(glm::mat4),
+                glm::value_ptr(m_camera.getView()));
+            m_camera.resetChangeFlag();
+
+            m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_gbufferPipelineLayout,
+                vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+                sizeof(glm::mat4), sizeof(glm::mat4),
+                glm::value_ptr(m_projection));
+            m_projectionChanged = false;
+
+            glm::vec4 cameraPos(m_camera.getPosition(), 1.0f);
+            m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_fullscreenLightingPipelineLayout,
+                vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+                2*sizeof(glm::mat4), sizeof(glm::vec4),
+                &cameraPos);
 
             m_perFrameSecondaryCommandBuffers.at(currentImage).end();
 
@@ -912,6 +1004,20 @@ namespace vg
                 if (ImGui::BeginMenu("Test"))
                 {
                     if(ImGui::Checkbox("Show demo window", &m_imguiShowDemoWindow)){}
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Shaders"))
+                {
+                    if (ImGui::Button("Reload: g-buffer"))
+                    {
+                        createGBufferPipeline();
+                        createAllCommandBuffers();
+                    }
+                    if (ImGui::Button("Reload: fullscreen lighting"))
+                    {
+                        createFullscreenLightingPipeline();
+                        createAllCommandBuffers();
+                    }
                     ImGui::EndMenu();
                 }
 
@@ -980,7 +1086,7 @@ namespace vg
         BufferInfo m_indexBufferInfo;
         BufferInfo m_indirectDrawBufferInfo;
         BufferInfo m_modelMatrixBufferInfo;
-
+        BufferInfo m_materialBufferInfo;
 
 
         std::vector<ImageInfo> m_allImages;
@@ -1021,7 +1127,6 @@ namespace vg
 
         // G-Buffer Descriptor Stuff
         vk::DescriptorSetLayout m_gbufferDescriptorSetLayout;
-        vk::DescriptorPool m_gbufferDescriptorPool;
         std::vector<vk::DescriptorSet> m_gbufferDescriptorSets;
 
         // G-Buffer Renderpass, Pipeline, Secondary Command Buffer
@@ -1041,8 +1146,15 @@ namespace vg
 
         // Fullscreen Descriptor Stuff
         vk::DescriptorSetLayout m_fullScreenLightingDescriptorSetLayout;
-        vk::DescriptorPool m_fullScreenLightingDescriptorPool;
         std::vector<vk::DescriptorSet> m_fullScreenLightingDescriptorSets;
+
+        vk::DescriptorPool m_combinedDescriptorPool;
+
+        // Light Stuff
+        std::vector<BufferInfo> m_lightBufferInfos;
+        vk::DescriptorSetLayout m_lightDescriptorSetLayout;
+        vk::DescriptorSet m_lightDescritporSet;
+        LightManager m_lightManager;
 
         // Sync Objects
     };
