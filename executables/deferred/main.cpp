@@ -25,6 +25,7 @@
 #include "utility/Timer.h"
 #include "stb/stb_image.h"
 #include "geometry/lightmanager.h"
+#include <sstream>
 
 namespace vg
 {
@@ -35,12 +36,12 @@ namespace vg
         DeferredApp() :
     		BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters" }),
     		m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
-			m_scene("San_Miguel/san-miguel-low-poly.obj")
+			m_scene("Sponza/sponza.obj")
 		{
             //createRenderPass();
 
             createCommandPools();
-            createSceneInformation("San_Miguel/");
+            createSceneInformation("Sponza/");
 
             createDepthResources();
 
@@ -85,10 +86,11 @@ namespace vg
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indexBufferInfo.m_Buffer), m_indexBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_vertexBufferInfo.m_Buffer), m_vertexBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_indirectDrawBufferInfo.m_Buffer), m_indirectDrawBufferInfo.m_BufferAllocation);
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_materialBufferInfo.m_Buffer), m_materialBufferInfo.m_BufferAllocation);
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_modelMatrixBufferInfo.m_Buffer), m_modelMatrixBufferInfo.m_BufferAllocation);
 
             for(const auto& buffer : m_lightBufferInfos)
                 vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(buffer.m_Buffer), buffer.m_BufferAllocation);
-
 
             m_context.getDevice().destroyImageView(m_depthImageView);
             vmaDestroyImage(m_context.getAllocator(), m_depthImage.m_Image, m_depthImage.m_ImageAllocation);
@@ -149,7 +151,6 @@ namespace vg
             m_context.getDevice().destroyDescriptorSetLayout(m_fullScreenLightingDescriptorSetLayout);
             m_context.getDevice().destroyDescriptorSetLayout(m_lightDescriptorSetLayout);
 
-            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_modelMatrixBufferInfo.m_Buffer), m_modelMatrixBufferInfo.m_BufferAllocation);
 
             m_context.getDevice().destroyPipeline(m_gbufferGraphicsPipeline);
             m_context.getDevice().destroyPipelineLayout(m_gbufferPipelineLayout);
@@ -738,10 +739,20 @@ namespace vg
 
             m_lightManager = LightManager(std::vector<DirectionalLight>{dirLight}, std::vector<PointLight>{pointLight}, std::vector<SpotLight>{spotLight});
 
-            // create buffers for lights
-            m_lightBufferInfos.push_back(fillBufferTroughStagedTransfer(m_lightManager.getDirectionalLights(), vk::BufferUsageFlagBits::eStorageBuffer));
-            m_lightBufferInfos.push_back(fillBufferTroughStagedTransfer(m_lightManager.getPointLights(), vk::BufferUsageFlagBits::eStorageBuffer));
-            m_lightBufferInfos.push_back(fillBufferTroughStagedTransfer(m_lightManager.getSpotLights(), vk::BufferUsageFlagBits::eStorageBuffer));
+            
+            // create buffers for lights. buffers are persistently mapped //TODO make lightmanager manage the light buffers with functions for access
+            m_lightBufferInfos.push_back(createBuffer(sizeof(DirectionalLight) * m_lightManager.getDirectionalLights().size(), vk::BufferUsageFlagBits::eStorageBuffer,
+                VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT));
+            memcpy(m_lightBufferInfos.at(0).m_BufferAllocInfo.pMappedData, m_lightManager.getDirectionalLights().data(), sizeof(DirectionalLight) * m_lightManager.getDirectionalLights().size());
+
+            m_lightBufferInfos.push_back(createBuffer(sizeof(PointLight) *m_lightManager.getPointLights().size(), vk::BufferUsageFlagBits::eStorageBuffer,
+                VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT));
+            memcpy(m_lightBufferInfos.at(1).m_BufferAllocInfo.pMappedData, m_lightManager.getPointLights().data(), sizeof(PointLight) * m_lightManager.getPointLights().size());
+
+            m_lightBufferInfos.push_back(createBuffer(sizeof(SpotLight) * m_lightManager.getSpotLights().size(), vk::BufferUsageFlagBits::eStorageBuffer,
+                VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT));
+            memcpy(m_lightBufferInfos.at(2).m_BufferAllocInfo.pMappedData, m_lightManager.getSpotLights().data(), sizeof(SpotLight) * m_lightManager.getSpotLights().size());
+
 
             // create light descriptor set layout, descriptor set
             vk::DescriptorSetLayoutBinding dirLights(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
@@ -1017,6 +1028,21 @@ namespace vg
                     {
                         createFullscreenLightingPipeline();
                         createAllCommandBuffers();
+                    }
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Lights"))
+                {
+                    for(int i = 0; i < m_lightManager.getDirectionalLights().size(); i++)
+                    {
+                        std::stringstream lightName;
+                        lightName << "Directional Light " << i;
+                        if(ImGui::CollapsingHeader(lightName.str().c_str()))
+                        {
+                            DirectionalLight* currentLight = reinterpret_cast<DirectionalLight*>(m_lightBufferInfos.at(0).m_BufferAllocInfo.pMappedData) + i;
+                            if (ImGui::DragFloat3((std::string("Intensity") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->intensity))) {}
+                            if (ImGui::DragFloat3((std::string("Direction") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->direction))) {}
+                        }
                     }
                     ImGui::EndMenu();
                 }
