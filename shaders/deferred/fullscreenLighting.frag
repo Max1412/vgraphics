@@ -102,7 +102,6 @@ struct LightResult
 
 void main() 
 {
-    //TODO do shading here
     vec4 posAndID = texture(gbufferPositionSampler, inUV);
     vec3 pos = posAndID.xyz;
     int drawID = int(posAndID.w);
@@ -141,7 +140,7 @@ void main()
         vec3 lightDir = normalize(-currentLight.direction);
         normal = normal == vec3(0.0f) ? lightDir : normal;
 
-                // diffuse shading
+        // diffuse shading
         float diff = max(dot(normal, lightDir), 0.0);
 
         // specular shading
@@ -153,12 +152,71 @@ void main()
         result.specular = currentLight.intensity * spec;
         result.direction = lightDir;
 
+        lightingColor += (diffCol * result.diffuse + specCol * result.specular);
     }
-    lightingColor += (diffCol * result.diffuse + specCol * result.specular);
+
+    for(int i = 0; i < pointLights.length(); i++)
+    {
+        PointLight currentLight = pointLights[i];
+
+        vec3 lightDir = normalize(currentLight.position - pos);
+        normal = normal == vec3(0.0f) ? lightDir : normal;
+
+        // diffuse shading
+        float diff = max(dot(normal, lightDir), 0.0);
+
+        // specular shading
+        vec3 halfwayDir = normalize(lightDir + viewDir);  
+        float spec = pow(max(dot(normal, halfwayDir), 0.0), material.N);
+
+        // attenuation
+        float distance = length(currentLight.position - pos);
+        float attenuation = 1.0 / max(0.001f, (currentLight.constant + currentLight.linear * distance + currentLight.quadratic * (distance * distance)));
+
+        // combine results
+        result.diffuse = currentLight.intensity * diff * attenuation;
+        result.specular = currentLight.intensity * spec * attenuation;
+        result.direction = lightDir;
+
+        lightingColor += (diffCol * result.diffuse + specCol * result.specular);
+    }
+
+    for(int i = 0; i < spotLights.length(); i++)
+    {
+        SpotLight currentLight = spotLights[i];
+
+        vec3 lightDir = normalize(currentLight.position - pos);
+        normal = normal == vec3(0.0f) ? lightDir : normal;
+
+        // diffuse shading
+        float diff = max(dot(normal, lightDir), 0.0);
+
+        // specular shading
+        vec3 halfwayDir = normalize(lightDir + viewDir);  
+        float spec = pow(max(dot(normal, halfwayDir), 0.0), material.N);
+
+        // attenuation
+        float distance = length(currentLight.position - pos);
+        float attenuation = 1.0 / max(0.001f, (currentLight.constant + currentLight.linear * distance + currentLight.quadratic * (distance * distance)));
+
+        // spotlight intensity
+        float theta = dot(lightDir, normalize(-currentLight.direction));
+        float epsilon = currentLight.cutoff - currentLight.outerCutoff;
+        float intensity = clamp((theta - currentLight.outerCutoff) / epsilon, 0.0, 1.0);
+
+        // combine results
+        result.diffuse = currentLight.intensity * diff * attenuation * intensity;
+        result.specular = currentLight.intensity * spec * attenuation * intensity;
+        result.direction = lightDir;
+
+        lightingColor += (diffCol * result.diffuse + specCol * result.specular);
+    }
+
+
+
 
     ////////////// TONEMAPPING
     vec3 hdrColor = lightingColor;
-
 
     const float exposure = 0.1f;
     const float gamma = 2.2f;
