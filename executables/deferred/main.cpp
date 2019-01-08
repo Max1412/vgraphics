@@ -1032,52 +1032,8 @@ namespace vg
                     }
                     ImGui::EndMenu();
                 }
-                if (ImGui::BeginMenu("Lights"))
-                {
-                    for(size_t i = 0; i < m_lightManager.getDirectionalLights().size(); i++)
-                    {
-                        std::stringstream lightName;
-                        lightName << "Directional Light " << i;
-                        if(ImGui::CollapsingHeader(lightName.str().c_str()))
-                        {
-                            DirectionalLight* currentLight = reinterpret_cast<DirectionalLight*>(m_lightBufferInfos.at(0).m_BufferAllocInfo.pMappedData) + i;
-                            if (ImGui::DragFloat3((std::string("Intensity ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->intensity))) {}
-                            if (ImGui::SliderFloat3((std::string("Direction ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->direction), -1.0f, 1.0f)) {}
-                        }
-                    }
-                    for (size_t i = 0; i < m_lightManager.getPointLights().size(); i++)
-                    {
-                        std::stringstream lightName;
-                        lightName << "Point Light " << i;
-                        if (ImGui::CollapsingHeader(lightName.str().c_str()))
-                        {
-                            PointLight* currentLight = reinterpret_cast<PointLight*>(m_lightBufferInfos.at(1).m_BufferAllocInfo.pMappedData) + i;
-                            if (ImGui::DragFloat3((std::string("Point Intensity ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->intensity))) {}
-                            if (ImGui::DragFloat3((std::string("Point Position ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->position))) {}
-                            if (ImGui::SliderFloat((std::string("Point Constant ") + std::to_string(i)).c_str(), &currentLight->constant, 0.0f, 1.0f)) {}
-                            if (ImGui::SliderFloat((std::string("Point Linear ") + std::to_string(i)).c_str(), &currentLight->linear, 0.0f, 0.25f)) {}
-                            if (ImGui::SliderFloat((std::string("Point Quadratic ") + std::to_string(i)).c_str(), &currentLight->quadratic, 0.0f, 0.1f)) {}
-                        }
-                    }
-                    for (size_t i = 0; i < m_lightManager.getSpotLights().size(); i++)
-                    {
-                        std::stringstream lightName;
-                        lightName << "Spot Light " << i;
-                        if (ImGui::CollapsingHeader(lightName.str().c_str()))
-                        {
-                            SpotLight* currentLight = reinterpret_cast<SpotLight*>(m_lightBufferInfos.at(2).m_BufferAllocInfo.pMappedData) + i;
-                            if (ImGui::DragFloat3((std::string("Spot Intensity ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->intensity))) {}
-                            if (ImGui::DragFloat3((std::string("Spot Position ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->position))) {}
-                            if (ImGui::SliderFloat3((std::string("Spot Direction ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->direction), -1.0f, 1.0f)) {}
-                            if (ImGui::SliderFloat((std::string("Spot Constant ") + std::to_string(i)).c_str(), &currentLight->constant, 0.0f, 1.0f)) {}
-                            if (ImGui::SliderFloat((std::string("Spot Linear ") + std::to_string(i)).c_str(), &currentLight->linear, 0.0f, 0.25f)) {}
-                            if (ImGui::SliderFloat((std::string("Spot Quadratic ") + std::to_string(i)).c_str(), &currentLight->quadratic, 0.0f, 0.1f)) {}
-                            if (ImGui::SliderFloat((std::string("Spot Cutoff ") + std::to_string(i)).c_str(), &currentLight->cutoff, 0.0f, glm::radians(90.0f))) {}
-                            if (ImGui::SliderFloat((std::string("Spot Outer Cutoff ") + std::to_string(i)).c_str(), &currentLight->outerCutoff, 0.0f, glm::radians(90.0f))) {}
-                        }
-                    }
-                    ImGui::EndMenu();
-                }
+                m_lightManager.lightGUI(m_lightBufferInfos.at(0), m_lightBufferInfos.at(1), m_lightBufferInfos.at(2));
+                
 
                 if(m_imguiShowDemoWindow) ImGui::ShowDemoWindow();
 
