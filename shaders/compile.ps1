@@ -1,6 +1,6 @@
 Write-Output "Compiling shaders..."
 
-$types = @("*.vert", "*.frag", "*.tesc", "*.tese", "*.geom", "*.comp", "*.rgen", "*.rchit", "*.rmiss")
+$types = @("*.vert", "*.frag", "*.tesc", "*.tese", "*.geom", "*.comp", "*.rgen", "*.rchit", "*.rmiss", "*.rahit")
 $files = Get-Childitem -Include $types -Recurse -File
 
 

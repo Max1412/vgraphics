@@ -617,7 +617,8 @@ namespace vg
 
 
             // transition image for to use it for imgui
-            transitionInCmdBuf(m_context.getSwapChainImages().at(currentImage), m_context.getSwapChainImageFormat(), vk::ImageLayout::eGeneral, vk::ImageLayout::eColorAttachmentOptimal, 1, m_commandBuffers.at(currentImage));
+            transitionInCmdBuf(m_context.getSwapChainImages().at(currentImage), m_context.getSwapChainImageFormat(), vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal, 1, m_commandBuffers.at(currentImage));
+
 
             m_commandBuffers.at(currentImage).end();
 
