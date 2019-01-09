@@ -1272,20 +1272,20 @@ namespace vg
 
                 m_gbufferSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_gbufferPipelineLayout, 0, 1, &m_gbufferDescriptorSets.at(0), 0, nullptr);
 
-                // transition gbuffer pos image back to be used as attachment
-                vk::ImageMemoryBarrier barrierGBTOFSWRITE(
-                    vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eColorAttachmentWrite,
-                    vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
-                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                    m_gbufferPositionImageInfos.at(i).m_Image,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferPositionImageInfos.at(0).mipLevels, 0, 1)
-                );
+                //// transition gbuffer pos image back to be used as attachment
+                //vk::ImageMemoryBarrier barrierGBTOFSWRITE(
+                //    vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eColorAttachmentWrite,
+                //    vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
+                //    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                //    m_gbufferPositionImageInfos.at(i).m_Image,
+                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferPositionImageInfos.at(0).mipLevels, 0, 1)
+                //);
 
-                m_gbufferSecondaryCommandBuffers.at(i).pipelineBarrier(
-                    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
-                    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
-                    1, &barrierGBTOFSWRITE
-                );
+                //m_gbufferSecondaryCommandBuffers.at(i).pipelineBarrier(
+                //    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
+                //    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
+                //    1, &barrierGBTOFSWRITE
+                //);
 
 
 
@@ -1316,38 +1316,39 @@ namespace vg
 
 
                 //// ray tracing (for shadows) command buffers
-                vk::CommandBufferBeginInfo beginInfo3(vk::CommandBufferUsageFlagBits::eSimultaneousUse);
+                vk::CommandBufferInheritanceInfo inheritanceInfo3(nullptr, 0, nullptr, 0, {}, {});
+                vk::CommandBufferBeginInfo beginInfo3(vk::CommandBufferUsageFlagBits::eSimultaneousUse | vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritanceInfo3);
                 m_rayTracingSecondaryCommandBuffers.at(i).begin(beginInfo3);
 
-                // transition gbuffer position image to read it in RT
-                vk::ImageMemoryBarrier barrierGBTORT(
-                    vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead,
-                    vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
-                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                    m_gbufferPositionImageInfos.at(i).m_Image,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferPositionImageInfos.at(0).mipLevels, 0, 1)
-                );
+                //// transition gbuffer position image to read it in RT
+                //vk::ImageMemoryBarrier barrierGBTORT(
+                //    vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead,
+                //    vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
+                //    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                //    m_gbufferPositionImageInfos.at(i).m_Image,
+                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferPositionImageInfos.at(0).mipLevels, 0, 1)
+                //);
 
-                m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
-                    vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
-                    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
-                    1, &barrierGBTORT
-                );
+                //m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
+                //    vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                //    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
+                //    1, &barrierGBTORT
+                //);
 
-                // transition shadow iamge to write to it in raygen shader
-                vk::ImageMemoryBarrier barrierShadowTORT(
-                    vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite,
-                    vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
-                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                    m_rtShadowImageInfos.at(i).m_Image,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, 1)
-                );
+                //// transition shadow iamge to write to it in raygen shader
+                //vk::ImageMemoryBarrier barrierShadowTORT(
+                //    vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite,
+                //    vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
+                //    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                //    m_rtShadowImageInfos.at(i).m_Image,
+                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, 1)
+                //);
 
-                m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
-                    vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
-                    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
-                    1, &barrierShadowTORT
-                );
+                //m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
+                //    vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                //    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
+                //    1, &barrierShadowTORT
+                //);
 
                 m_rayTracingSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipeline);
                 std::array<vk::DescriptorSet, 2> dss = { m_rayTracingDescriptorSets.at(i), m_lightDescritporSet };
@@ -1364,20 +1365,20 @@ namespace vg
                 );
 
 
-                // transition image to read it in the fullscreen lighting shader //TODO transition back
-                vk::ImageMemoryBarrier barrierShadowTOFS(
-                    vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
-                    vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
-                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                    m_rtShadowImageInfos.at(i).m_Image,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, 1)
-                );
+                //// transition image to read it in the fullscreen lighting shader //TODO transition back
+                //vk::ImageMemoryBarrier barrierShadowTOFS(
+                //    vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
+                //    vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
+                //    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                //    m_rtShadowImageInfos.at(i).m_Image,
+                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, 1)
+                //);
 
-                m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
-                    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
-                    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
-                    1, &barrierShadowTOFS
-                );
+                //m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
+                //    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
+                //    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
+                //    1, &barrierShadowTOFS
+                //);
 
                 m_rayTracingSecondaryCommandBuffers.at(i).end();
 
