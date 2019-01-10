@@ -46,3 +46,8 @@ struct LightResult
     vec3 specular;
     vec3 direction;
 };
+
+bool checkDirectionalShadow(in int lightID, in uvec4 bitfield)
+{
+    return bitfieldExtract(bitfield.x, lightID, 1) == 1;
+}

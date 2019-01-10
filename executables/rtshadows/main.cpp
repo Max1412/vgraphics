@@ -60,6 +60,7 @@ namespace vg
             createCombinedDescriptorPool();
 
             createLightStuff();
+            createRTResources();
 
             createGBufferDescriptors();
             createFullscreenLightingDescriptors();
@@ -68,7 +69,6 @@ namespace vg
             createFullscreenLightingPipeline();
 
             // RT
-            createRTResources();
             createAccelerationStructure();
             createRTPipeline();
 
@@ -175,7 +175,7 @@ namespace vg
                 vk::SampleCountFlagBits::e1,
                 vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,            // load store op
                 vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
-                vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal //TODO is this the right layout? maybe colorattachmentoptimal
+                vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal //TODO is this the right layout? maybe colorattachmentoptimal
             );
 
             vk::AttachmentReference positionAttachmentRef(0, vk::ImageLayout::eColorAttachmentOptimal);
@@ -184,7 +184,7 @@ namespace vg
                 vk::SampleCountFlagBits::e1,
                 vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,            // load store op
                 vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
-                vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal //TODO is this the right layout? maybe colorattachmentoptimal
+                vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal //TODO is this the right layout? maybe colorattachmentoptimal
             );
 
             vk::AttachmentReference normalAttachmentRef(1, vk::ImageLayout::eColorAttachmentOptimal);
@@ -193,7 +193,7 @@ namespace vg
                 vk::SampleCountFlagBits::e1,
                 vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,            // load store op
                 vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
-                vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal //TODO is this the right layout? maybe colorattachmentoptimal
+                vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal //TODO is this the right layout? maybe colorattachmentoptimal
             );
 
             vk::AttachmentReference uvAttachmentRef(2, vk::ImageLayout::eColorAttachmentOptimal);
@@ -212,7 +212,7 @@ namespace vg
                 vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
                 {}, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::DependencyFlagBits::eByRegion);
 
-            std::array<vk::AttachmentReference, 3> colorAttachmentRefs = { positionAttachmentRef, normalAttachmentRef, uvAttachmentRef };
+            std::array colorAttachmentRefs = { positionAttachmentRef, normalAttachmentRef, uvAttachmentRef };
 
             vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics,
                 0, nullptr,                 // input attachments (standard values)
@@ -221,7 +221,7 @@ namespace vg
                 &depthAttachmentRef);       // depth stencil attachment
                                             // other attachment at standard values: Preserved
 
-            std::array<vk::AttachmentDescription, 4> attachments = { positionAttachment, normalAttachment, uvAttachment, depthAttachment };
+            std::array attachments = { positionAttachment, normalAttachment, uvAttachment, depthAttachment };
 
             vk::RenderPassCreateInfo renderpassInfo({}, static_cast<uint32_t>(attachments.size()), attachments.data(), 1, &subpass, 1, &dependency);
 
@@ -235,10 +235,11 @@ namespace vg
             vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImageSamplers.size()));
             vk::DescriptorPoolSize poolSizeForSSBOs(vk::DescriptorType::eStorageBuffer, 7);
             vk::DescriptorPoolSize gbufferImages(vk::DescriptorType::eCombinedImageSampler, 3);
+            vk::DescriptorPoolSize shadowImage(vk::DescriptorType::eStorageImage, 1);
             vk::DescriptorPoolSize rtOutputImage(vk::DescriptorType::eStorageImage, 1);
             vk::DescriptorPoolSize rtAS(vk::DescriptorType::eAccelerationStructureNV, 1);
 
-            std::array<vk::DescriptorPoolSize, 5> poolSizes = { poolSizeForSSBOs, gbufferImages, poolSizeAllImages, rtOutputImage, rtAS };
+            std::array poolSizes = { poolSizeForSSBOs, gbufferImages, poolSizeAllImages, rtOutputImage, rtAS };
 
 
             vk::DescriptorPoolCreateInfo poolInfo({}, 2 * static_cast<uint32_t>(m_swapChainFramebuffers.size()) + 2, static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
@@ -523,7 +524,7 @@ namespace vg
         {
 
             const auto vertShaderCode = Utility::readFile("deferred/fullscreen.vert.spv");
-            const auto fragShaderCode = Utility::readFile("deferred/fullscreenLighting.frag.spv");
+            const auto fragShaderCode = Utility::readFile("rtshadows/fullscreenLighting.frag.spv");
 
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
@@ -613,14 +614,16 @@ namespace vg
             vk::DescriptorSetLayoutBinding normalTextureBinding(3, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
             vk::DescriptorSetLayoutBinding uvTextureBinding(4, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
             vk::DescriptorSetLayoutBinding materialSSBOBinding(5, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
+            vk::DescriptorSetLayoutBinding shadowImageBinding(6, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
 
-            std::array<vk::DescriptorSetLayoutBinding, 6> bindings = {
+            std::array bindings = {
                 perMeshInformationIndirectDrawSSBOLB,
                 allTexturesLayoutBinding,
                 positionTextureBinding,
                 normalTextureBinding,
                 uvTextureBinding,
-                materialSSBOBinding
+                materialSSBOBinding,
+                shadowImageBinding
             };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
@@ -660,14 +663,19 @@ namespace vg
                 vk::DescriptorBufferInfo materialInfo(m_materialBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
                 vk::WriteDescriptorSet descWriteMaterialInfo(m_fullScreenLightingDescriptorSets.at(i), 5, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &materialInfo, nullptr);
 
+                vk::DescriptorImageInfo shadowImageInfo(m_rtShadowImageSamplers.at(i), m_rtShadowImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
+                vk::WriteDescriptorSet shadowImageWrite(m_fullScreenLightingDescriptorSets.at(i), 6, 0, 1, vk::DescriptorType::eCombinedImageSampler, &shadowImageInfo, nullptr, nullptr);
 
-                std::array<vk::WriteDescriptorSet, 6> descriptorWrites = { 
+
+                std::array descriptorWrites = { 
                     descWritePerMeshInfo, 
                     descWriteAllImages,
                     descWriteGBufferPos,
                     descWriteGBufferNormal,
                     descWriteGBufferUV,
-                descWriteMaterialInfo };
+                    descWriteMaterialInfo,
+                    shadowImageWrite 
+                };
 
                 m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
             }
@@ -803,6 +811,8 @@ namespace vg
             // "shadow images": uvec4 images to store shadows ("light source non-visibility") as a bitfield
             // multi-buffered for whatever reason
             const auto ext = m_context.getSwapChainExtent();
+            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+
             for (size_t i = 0; i < m_context.getSwapChainImages().size(); i++)
             {
                 // image
@@ -829,7 +839,28 @@ namespace vg
                     static_cast<float>(m_rtShadowImageInfos.at(i).mipLevels),
                     vk::BorderColor::eIntOpaqueBlack, false);
                 m_rtShadowImageSamplers.push_back(m_context.getDevice().createSampler(samplerRTShadow));
+
+
+                // transition images to use them for the first time
+
+                vk::ImageMemoryBarrier barrierShadowTOFS(
+                    {}, vk::AccessFlagBits::eShaderRead,
+                    vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal,
+                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                    m_rtShadowImageInfos.at(i).m_Image,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, 1)
+                );
+
+                cmdBuf.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eFragmentShader,
+                    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
+                    1, &barrierShadowTOFS
+                );
+
+
             }
+            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+
           
         }
 
@@ -1080,12 +1111,17 @@ namespace vg
             const auto rgenShaderCode = Utility::readFile("rtshadows/shadowtest.rgen.spv");
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 
-            const auto chitShaderCode = Utility::readFile("rtshadows/shadowtest.rahit.spv");
-            const auto ahitShaderModule = m_context.createShaderModule(chitShaderCode);
+            const auto ahitShaderCode = Utility::readFile("rtshadows/shadowtest.rahit.spv");
+            const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
-            const std::array<vk::PipelineShaderStageCreateInfo, 2> rtShaderStageInfos = {
+            const auto missShaderCode = Utility::readFile("rtshadows/shadowtest.rmiss.spv");
+            const auto missShaderModule = m_context.createShaderModule(missShaderCode);
+
+
+            const std::array rtShaderStageInfos = {
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eAnyHitNV, ahitShaderModule, "main"),
+                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main")
             };
 
             std::array<vk::DescriptorSetLayout, 2> dss = { m_rayTracingDescriptorSetLayout, m_lightDescriptorSetLayout };
@@ -1093,11 +1129,13 @@ namespace vg
 
             m_rayTracingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutCreateInfo);
 
-            std::array<vk::RayTracingShaderGroupCreateInfoNV, 2> shaderGroups = {
+            std::array shaderGroups = {
                 // group 0: raygen
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
                 // group 1: any hit
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV},
+                // group 2: miss
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
             };
 
             vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
@@ -1144,7 +1182,7 @@ namespace vg
                 vk::DescriptorImageInfo descriptorOutputImageInfo(nullptr, m_rtShadowImageViews.at(i), vk::ImageLayout::eGeneral);
                 vk::WriteDescriptorSet outputImageWrite(m_rayTracingDescriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eStorageImage, &descriptorOutputImageInfo, nullptr, nullptr);
 
-                vk::DescriptorImageInfo descriptorGBufferPosImageInfo(m_gbufferPositionSamplers.at(i), m_gbufferPositionImageViews.at(i), vk::ImageLayout::eGeneral);
+                vk::DescriptorImageInfo descriptorGBufferPosImageInfo(m_gbufferPositionSamplers.at(i), m_gbufferPositionImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
                 vk::WriteDescriptorSet gbufferPosImageWrite(m_rayTracingDescriptorSets.at(i), 2, 0, 1, vk::DescriptorType::eCombinedImageSampler, &descriptorGBufferPosImageInfo, nullptr, nullptr);
 
 
@@ -1249,7 +1287,7 @@ namespace vg
             vk::CommandBufferAllocateInfo secondaryCmdAllocInfo(m_commandPool, vk::CommandBufferLevel::eSecondary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
             m_gbufferSecondaryCommandBuffers            = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
             m_fullscreenLightingSecondaryCommandBuffers = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
-            m_rayTracingSecondaryCommandBuffers = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
+            m_rayTracingSecondaryCommandBuffers         = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
 
 
             // dynamic secondary buffers (containing per-frame information), getting re-recorded if necessary
@@ -1271,23 +1309,6 @@ namespace vg
                 m_gbufferSecondaryCommandBuffers.at(i).bindIndexBuffer(m_indexBufferInfo.m_Buffer, 0ull, vk::IndexType::eUint32);
 
                 m_gbufferSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_gbufferPipelineLayout, 0, 1, &m_gbufferDescriptorSets.at(0), 0, nullptr);
-
-                //// transition gbuffer pos image back to be used as attachment
-                //vk::ImageMemoryBarrier barrierGBTOFSWRITE(
-                //    vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eColorAttachmentWrite,
-                //    vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
-                //    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                //    m_gbufferPositionImageInfos.at(i).m_Image,
-                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferPositionImageInfos.at(0).mipLevels, 0, 1)
-                //);
-
-                //m_gbufferSecondaryCommandBuffers.at(i).pipelineBarrier(
-                //    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
-                //    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
-                //    1, &barrierGBTOFSWRITE
-                //);
-
-
 
                 m_gbufferSecondaryCommandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()),
                     sizeof(std::decay_t<decltype(*m_scene.getDrawCommandData().data())>));
@@ -1317,38 +1338,49 @@ namespace vg
 
                 //// ray tracing (for shadows) command buffers
                 vk::CommandBufferInheritanceInfo inheritanceInfo3(nullptr, 0, nullptr, 0, {}, {});
-                vk::CommandBufferBeginInfo beginInfo3(vk::CommandBufferUsageFlagBits::eSimultaneousUse | vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritanceInfo3);
+                vk::CommandBufferBeginInfo beginInfo3(vk::CommandBufferUsageFlagBits::eSimultaneousUse , &inheritanceInfo3);
                 m_rayTracingSecondaryCommandBuffers.at(i).begin(beginInfo3);
 
-                //// transition gbuffer position image to read it in RT
-                //vk::ImageMemoryBarrier barrierGBTORT(
-                //    vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead,
-                //    vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
-                //    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                //    m_gbufferPositionImageInfos.at(i).m_Image,
-                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferPositionImageInfos.at(0).mipLevels, 0, 1)
-                //);
+                // transition gbuffer images to read it in RT //TODO transition back?
 
-                //m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
-                //    vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
-                //    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
-                //    1, &barrierGBTORT
-                //);
+                vk::ImageMemoryBarrier barrierGBposTORT(
+                    vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead,
+                    vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                    m_gbufferPositionImageInfos.at(i).m_Image,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferPositionImageInfos.at(0).mipLevels, 0, 1)
+                );
 
-                //// transition shadow iamge to write to it in raygen shader
-                //vk::ImageMemoryBarrier barrierShadowTORT(
-                //    vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite,
-                //    vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
-                //    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                //    m_rtShadowImageInfos.at(i).m_Image,
-                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, 1)
-                //);
+                vk::ImageMemoryBarrier barrierGBnormalTORT = barrierGBposTORT;
+                barrierGBnormalTORT.setImage(m_gbufferNormalImageInfos.at(i).m_Image);
+                barrierGBnormalTORT.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferNormalImageInfos.at(0).mipLevels, 0, 1));
 
-                //m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
-                //    vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
-                //    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
-                //    1, &barrierShadowTORT
-                //);
+                vk::ImageMemoryBarrier barrierGBuvTORT = barrierGBposTORT;
+                barrierGBuvTORT.setImage(m_gbufferUVImageInfos.at(i).m_Image);
+                barrierGBuvTORT.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferUVImageInfos.at(0).mipLevels, 0, 1));
+
+
+                std::array gBufferBarriers = { barrierGBposTORT, barrierGBnormalTORT, barrierGBuvTORT };
+
+                m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
+                    vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                    static_cast<vk::DependencyFlagBits>(0), {}, {}, gBufferBarriers
+                );
+
+                // transition shadow image to write to it in raygen shader
+                vk::ImageMemoryBarrier barrierShadowTORT(
+                    vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite,
+                    vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
+                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                    m_rtShadowImageInfos.at(i).m_Image,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, 1)
+                );
+
+                m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
+                    vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
+                    1, &barrierShadowTORT
+                );
 
                 m_rayTracingSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipeline);
                 std::array<vk::DescriptorSet, 2> dss = { m_rayTracingDescriptorSets.at(i), m_lightDescritporSet };
@@ -1358,27 +1390,27 @@ namespace vg
                 auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
                 OwnCmdTraceRays(m_rayTracingSecondaryCommandBuffers.at(i),
                     m_sbtInfo.m_Buffer, 0, // raygen
-                    nullptr, 0, 0, // miss
-                    m_sbtInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // hit
+                    m_sbtInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+                    m_sbtInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // (any) hit
                     nullptr, 0, 0, // callable
                     m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
                 );
 
 
-                //// transition image to read it in the fullscreen lighting shader //TODO transition back
-                //vk::ImageMemoryBarrier barrierShadowTOFS(
-                //    vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
-                //    vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
-                //    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                //    m_rtShadowImageInfos.at(i).m_Image,
-                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, 1)
-                //);
+                // transition image to read it in the fullscreen lighting shader //TODO transition back
+                vk::ImageMemoryBarrier barrierShadowTOFS(
+                    vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
+                    vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
+                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                    m_rtShadowImageInfos.at(i).m_Image,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, 1)
+                );
 
-                //m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
-                //    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
-                //    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
-                //    1, &barrierShadowTOFS
-                //);
+                m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
+                    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
+                    static_cast<vk::DependencyFlagBits>(0), 0, nullptr, 0, nullptr,
+                    1, &barrierShadowTOFS
+                );
 
                 m_rayTracingSecondaryCommandBuffers.at(i).end();
 
@@ -1483,6 +1515,11 @@ namespace vg
                     if (ImGui::Button("Reload: fullscreen lighting"))
                     {
                         createFullscreenLightingPipeline();
+                        createAllCommandBuffers();
+                    }
+                    if (ImGui::Button("Reload: ray tracing"))
+                    {
+                        createRTPipeline();
                         createAllCommandBuffers();
                     }
                     ImGui::EndMenu();

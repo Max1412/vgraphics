@@ -15,21 +15,21 @@ void main()
     const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
     const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeNV.xy);
 
-    // is this even needed
-    const vec3 pos = texture(gbufferPosSampler, inUV).xyz;
-    vec3 origin = pos;
+
+    vec3 origin = texture(gbufferPosSampler, inUV).xyz;
 
     uint rayFlags = gl_RayFlagsOpaqueNV;
     uint cullMask = 0xff;
     float tmin = 0.001;
     float tmax = 100000.0;
     
-    hitValue = 0;
     uint dirBitfield = 0U;
     for(int i = 0; i < dirLights.length(); i++)
     {
         DirectionalLight currentLight = dirLights[i];
         vec3 direction = -currentLight.direction;
+        origin += direction * 1e-4f;
+
         traceNV(topLevelAS, rayFlags, cullMask,
             0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
             origin, tmin, direction, tmax,
@@ -37,14 +37,12 @@ void main()
         );
 
         // todo only 32 light sources supported
-        if(hitValue == 1)
-        {
-            dirBitfield |= 1 << i;
-        }
+        // if(hitValue == 1)
+        // {
+            //dirBitfield |= 1 << i;
+        dirBitfield = bitfieldInsert(dirBitfield, hitValue, i, 1);
+        //}
 
         imageStore(image, ivec2(gl_LaunchIDNV.xy), uvec4(dirBitfield, 0U, 0U, 0U));
     }
-
-
-
 }
