@@ -1,11 +1,9 @@
 #version 460
 #extension GL_NV_ray_tracing : require
 
-layout(location = 0) rayPayloadInNV int hitValue;
-hitAttributeNV vec2 attribs;
-
+layout(location = 0) rayPayloadInNV uint hitValue;
 
 void main()
 {
-    hitValue = 1; //shadow!
+    //hitValue = 1U; //shadow!
 }

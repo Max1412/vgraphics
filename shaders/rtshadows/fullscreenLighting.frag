@@ -85,13 +85,13 @@ void main()
     const vec3 ambient = vec3(0.3f);
     vec3 lightingColor = ambient * diffCol;
 
-    uvec4 lightBitfield = texture(shadowImage, inUV);
+    uvec4 lightBitfield = texture(shadowImage, inUV.xy);
 
     LightResult result;
     vec3 viewDir = normalize(matrices.cameraPos.xyz - pos);
     for(int i = 0; i < dirLights.length(); i++)
     {
-        if(bitfieldExtract(lightBitfield.x, i, 1) == 0)
+        if(bitfieldExtract(lightBitfield.x, i, 1) == 1)
         {
             DirectionalLight currentLight = dirLights[i];
             vec3 lightDir = normalize(-currentLight.direction);
