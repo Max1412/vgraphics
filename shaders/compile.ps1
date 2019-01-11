@@ -16,5 +16,5 @@ foreach($file in $files)
     Write-Output $lastDirName\$name
     Invoke-Expression $command
 }
-
-Write-Output "Done!"
+$date = Get-Date -Format g
+Write-Output "Done:" $date 

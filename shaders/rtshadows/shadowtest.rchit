@@ -5,5 +5,5 @@ layout(location = 0) rayPayloadInNV uint hitValue;
 
 void main()
 {
-    hitValue = 0U; // no shadow!!
+    hitValue = 1U; //shadow!
 }

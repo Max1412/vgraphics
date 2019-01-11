@@ -23,12 +23,12 @@ void main()
     float tmin = 0.001;
     float tmax = 100000.0;
     
-    uint dirBitfield = 0U;
-    hitValue = 0U;
+    uvec4 bitField = uvec4(0U);
+    //hitValue = 0U;
     for(int i = 0; i < dirLights.length(); i++)
     {
         DirectionalLight currentLight = dirLights[i];
-        vec3 direction = -currentLight.direction;
+        vec3 direction = -normalize(currentLight.direction);
 
         traceNV(topLevelAS, rayFlags, cullMask,
             0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
@@ -37,9 +37,47 @@ void main()
         );
 
         // todo only 32 light sources supported
-        //if(hitValue == 1)
-            dirBitfield = bitfieldInsert(dirBitfield, hitValue, i, 1);
-
+        bitField.x = bitfieldInsert(bitField.x, hitValue, i, 1);
     }
-    imageStore(image, ivec2(gl_LaunchIDNV.xy), uvec4(dirBitfield, 0U, 0U, 0U));
+
+    for(int i = 0; i < pointLights.length(); i++)
+    {
+        PointLight currentLight = pointLights[i];
+        vec3 direction = normalize(currentLight.position - origin);
+
+        tmax = length(currentLight.position - origin);
+        //TODO tmax should also not be greater than the "radius of the influence sphere" of the point light
+
+        traceNV(topLevelAS, rayFlags, cullMask,
+            0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
+            origin, tmin, direction, tmax,
+            0 /*payload*/ // X here is location = X of the payload
+        );
+
+        // todo only 32 light sources supported
+        bitField.y = bitfieldInsert(bitField.y, hitValue, i, 1);
+    }
+
+    for(int i = 0; i < spotLights.length(); i++)
+    {
+        SpotLight currentLight = spotLights[i];
+        vec3 direction = normalize(currentLight.position - origin);
+
+        if(dot(direction, normalize(currentLight.direction)) > currentLight.outerCutoff)
+            continue;
+
+        tmax = length(currentLight.position - origin);
+        //TODO tmax should also not be greater than the "radius of the influence sphere" of the point light
+
+        traceNV(topLevelAS, rayFlags, cullMask,
+            0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
+            origin, tmin, direction, tmax,
+            0 /*payload*/ // X here is location = X of the payload
+        );
+
+        // todo only 32 light sources supported
+        bitField.z = bitfieldInsert(bitField.z, hitValue, i, 1);
+    }
+
+    imageStore(image, ivec2(gl_LaunchIDNV.xy), bitField);
 }

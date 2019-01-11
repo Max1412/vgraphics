@@ -29,31 +29,6 @@
 
 namespace vg
 {
-    using af = vk::AccessFlagBits;
-    vk::AccessFlags all = af::eIndirectCommandRead | af::eIndexRead | af::eVertexAttributeRead | af::eUniformRead |
-        af::eInputAttachmentRead |
-        af::eShaderRead |
-        af::eShaderWrite |
-        af::eColorAttachmentRead |
-        af::eColorAttachmentWrite |
-        af::eDepthStencilAttachmentRead |
-        af::eDepthStencilAttachmentWrite |
-        af::eTransferRead |
-        af::eTransferWrite |
-        af::eHostRead |
-        af::eHostWrite |
-        af::eMemoryRead |
-        af::eMemoryWrite |
-        af::eTransformFeedbackWriteEXT |
-        af::eTransformFeedbackCounterReadEXT |
-        af::eTransformFeedbackCounterWriteEXT |
-        af::eConditionalRenderingReadEXT |
-        af::eCommandProcessReadNVX |
-        af::eCommandProcessWriteNVX |
-        af::eColorAttachmentReadNoncoherentEXT |
-        af::eShadingRateImageReadNV |
-        af::eAccelerationStructureReadNV |
-        af::eAccelerationStructureWriteNV;
 
     class RTShadowsApp : public BaseApp
     {
@@ -869,15 +844,15 @@ namespace vg
                 // transition images to use them for the first time
 
                 vk::ImageMemoryBarrier barrierShadowTOFS(
-                    all, all,
+                    {}, vk::AccessFlagBits::eShaderRead,
                     vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal,
                     VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
                     m_rtShadowImageInfos.at(i).m_Image,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(0).mipLevels, 0, VK_REMAINING_ARRAY_LAYERS)
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(i).mipLevels, 0, VK_REMAINING_ARRAY_LAYERS)
                 );
 
                 cmdBuf.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
+                    vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eFragmentShader,
                     vk::DependencyFlagBits::eByRegion, 0, nullptr, 0, nullptr,
                     1, &barrierShadowTOFS
                 );
@@ -1139,13 +1114,18 @@ namespace vg
             const auto ahitShaderCode = Utility::readFile("rtshadows/shadowtest.rahit.spv");
             const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
+            const auto chitShaderCode = Utility::readFile("rtshadows/shadowtest.rchit.spv");
+            const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
+
             const auto missShaderCode = Utility::readFile("rtshadows/shadowtest.rmiss.spv");
             const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
 
             const std::array rtShaderStageInfos = {
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
+                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eAnyHitNV, ahitShaderModule, "main"),
+
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main")
             };
 
@@ -1158,9 +1138,10 @@ namespace vg
                 // group 0: raygen
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
                 // group 1: any hit
-                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV},
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV},
                 // group 2: miss
-                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 3, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
             };
 
             vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
@@ -1372,15 +1353,9 @@ namespace vg
                 m_rayTracingSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipelineLayout,
                     0, static_cast<uint32_t>(dss.size()), dss.data(), 0, nullptr);
 
-                //vk::ClearColorValue clearRTShadow(std::array<uint32_t, 4>{0U, 0U, 0U, 0U});
-                //m_rayTracingSecondaryCommandBuffers.at(i).clearColorImage(m_rtShadowImageInfos.at(i).m_Image,
-                //    vk::ImageLayout::eTransferDstOptimal, clearRTShadow,
-                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
-                //);
-
                 // transition gbuffer images to read it in RT //TODO transition back?
                 vk::ImageMemoryBarrier barrierGBposTORT(
-                    all, all,
+                    vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead,
                     vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
                     VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
                     m_gbufferPositionImageInfos.at(i).m_Image,
@@ -1393,19 +1368,19 @@ namespace vg
 
                 vk::ImageMemoryBarrier barrierGBuvTORT = barrierGBposTORT;
                 barrierGBuvTORT.setImage(m_gbufferUVImageInfos.at(i).m_Image);
-                barrierGBuvTORT.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferUVImageInfos.at(i).mipLevels, 0, VK_REMAINING_ARRAY_LAYERS));
+                barrierGBuvTORT.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferUVImageInfos.at(0).mipLevels, 0, VK_REMAINING_ARRAY_LAYERS));
 
 
                 std::array gBufferBarriers = { barrierGBposTORT, barrierGBnormalTORT, barrierGBuvTORT };
 
                 m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
-                    vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
+                    vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eRayTracingShaderNV,
                     vk::DependencyFlagBits::eByRegion, {}, {}, gBufferBarriers
                 );
 
                 // transition shadow image to write to it in raygen shader
                 vk::ImageMemoryBarrier barrierShadowTORT(
-                    all, all,
+                    vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite,
                     vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
                     VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
                     m_rtShadowImageInfos.at(i).m_Image,
@@ -1413,15 +1388,16 @@ namespace vg
                 );
 
                 m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
-                    vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
+                    vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
                     vk::DependencyFlagBits::eByRegion, 0, nullptr, 0, nullptr,
                     1, &barrierShadowTORT
                 );
-                                               
+
+
                 auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
                 OwnCmdTraceRays(m_rayTracingSecondaryCommandBuffers.at(i),
                     m_sbtInfo.m_Buffer, 0, // raygen
-                    m_sbtInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+                    m_sbtInfo.m_Buffer, 3 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
                     m_sbtInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // (any) hit
                     nullptr, 0, 0, // callable
                     m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
@@ -1430,7 +1406,7 @@ namespace vg
 
                 // transition image to read it in the fullscreen lighting shader //TODO transition back
                 vk::ImageMemoryBarrier barrierShadowTOFS(
-                    all, all,
+                    vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
                     vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
                     VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
                     m_rtShadowImageInfos.at(i).m_Image,
@@ -1438,7 +1414,7 @@ namespace vg
                 );
 
                 m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
-                    vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
+                    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
                     vk::DependencyFlagBits::eByRegion, 0, nullptr, 0, nullptr,
                     1, &barrierShadowTOFS
                 );

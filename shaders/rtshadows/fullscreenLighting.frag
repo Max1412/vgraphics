@@ -92,29 +92,33 @@ void main()
     for(int i = 0; i < dirLights.length(); i++)
     {
         if(bitfieldExtract(lightBitfield.x, i, 1) == 1)
-        {
-            DirectionalLight currentLight = dirLights[i];
-            vec3 lightDir = normalize(-currentLight.direction);
-            normal = normal == vec3(0.0f) ? lightDir : normal;
+            continue;
+        
+        DirectionalLight currentLight = dirLights[i];
+        vec3 lightDir = normalize(-currentLight.direction);
+        normal = normal == vec3(0.0f) ? lightDir : normal;
 
-            // diffuse shading
-            float diff = max(dot(normal, lightDir), 0.0);
+        // diffuse shading
+        float diff = max(dot(normal, lightDir), 0.0);
 
-            // specular shading
-            vec3 halfwayDir = normalize(lightDir + viewDir);  
-            float spec = pow(max(dot(normal, halfwayDir), 0.0), material.N);
+        // specular shading
+        vec3 halfwayDir = normalize(lightDir + viewDir);  
+        float spec = pow(max(dot(normal, halfwayDir), 0.0), material.N);
 
-            // combine results
-            result.diffuse = currentLight.intensity * diff;
-            result.specular = currentLight.intensity * spec;
-            result.direction = lightDir;
+        // combine results
+        result.diffuse = currentLight.intensity * diff;
+        result.specular = currentLight.intensity * spec;
+        result.direction = lightDir;
 
-            lightingColor += (diffCol * result.diffuse + specCol * result.specular);
-        }
+        lightingColor += (diffCol * result.diffuse + specCol * result.specular);
+        
     }
 
     for(int i = 0; i < pointLights.length(); i++)
     {
+        if(bitfieldExtract(lightBitfield.y, i, 1) == 1)
+            continue;
+
         PointLight currentLight = pointLights[i];
 
         vec3 lightDir = normalize(currentLight.position - pos);
@@ -141,6 +145,9 @@ void main()
 
     for(int i = 0; i < spotLights.length(); i++)
     {
+        if(bitfieldExtract(lightBitfield.z, i, 1) == 1)
+            continue;
+
         SpotLight currentLight = spotLights[i];
 
         vec3 lightDir = normalize(currentLight.position - pos);
