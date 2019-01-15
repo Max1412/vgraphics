@@ -1,0 +1,93 @@
+#version 460
+#extension GL_NV_ray_tracing : require
+
+layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
+layout(set = 0, binding = 1, r32f) uniform image2D image;
+layout(set = 0, binding = 2) uniform sampler2D gbufferPosSampler;
+
+layout(location = 0) rayPayloadNV uint hitValue;
+
+
+#include "light.glsl"
+
+const int NUM_SAMPLES = 8;
+const float PI = 3.1415926535;
+
+float mod289(float x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+vec4 mod289(vec4 x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+vec4 perm(vec4 x){return mod289(((x * 34.0) + 1.0) * x);}
+
+float noise(vec3 p){
+    vec3 a = floor(p);
+    vec3 d = p - a;
+    d = d * d * (3.0 - 2.0 * d);
+
+    vec4 b = a.xxyy + vec4(0.0, 1.0, 0.0, 1.0);
+    vec4 k1 = perm(b.xyxy);
+    vec4 k2 = perm(k1.xyxy + b.zzww);
+
+    vec4 c = k2 + a.zzzz;
+    vec4 k3 = perm(c);
+    vec4 k4 = perm(c + 1.0);
+
+    vec4 o1 = fract(k3 * (1.0 / 41.0));
+    vec4 o2 = fract(k4 * (1.0 / 41.0));
+
+    vec4 o3 = o2 * d.z + o1 * (1.0 - d.z);
+    vec2 o4 = o3.yw * d.x + o3.xz * (1.0 - d.x);
+
+    return o4.y * d.y + o4.x * (1.0 - d.y);
+}
+
+vec3 generatePointOnSphericalLight(in vec3 position, in float radius, vec3 seed, vec3 seed2)
+{
+    float theta = noise(seed) * 2.0f * PI;
+    float u = (noise(seed2) * 2.0f) - 1.0f;
+    float x = sqrt(1-(u*u)) * cos(theta);
+    float y = sqrt(1-(u*u)) * sin(theta);
+    float z = u;
+    return position + (radius * vec3(x, y, z));
+}
+
+void main() 
+{
+    const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
+    const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeNV.xy);
+
+
+    vec3 origin = texture(gbufferPosSampler, inUV).xyz;
+
+    uint rayFlags = gl_RayFlagsOpaqueNV;
+    uint cullMask = 0xff;
+    float tmin = 0.001;
+    float tmax = 100000.0;
+    
+    float shadowValue = 0.0f;
+
+    for(int i = 0; i < pointLights.length(); i++)
+    {
+        PointLight currentLight = pointLights[i];
+
+        //TODO tmax should also not be greater than the "radius of the influence sphere" of the point light
+
+        for(int j = 0; j < NUM_SAMPLES; j++)
+        {
+
+            vec3 pointOnLight = generatePointOnSphericalLight(currentLight.position, currentLight.radius, origin, origin + vec3(inUV, pixelCenter.y));
+            tmax = length(pointOnLight - origin);
+
+            vec3 direction = normalize(pointOnLight - origin);
+
+            traceNV(topLevelAS, rayFlags, cullMask,
+                0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
+                origin, tmin, direction, tmax,
+                0 /*payload*/ // X here is location = X of the payload
+            );
+
+            shadowValue += hitValue;
+        }
+        shadowValue /= NUM_SAMPLES;
+    }
+
+    imageStore(image, ivec2(gl_LaunchIDNV.xy), vec4(shadowValue));
+}

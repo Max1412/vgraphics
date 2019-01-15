@@ -94,6 +94,23 @@ namespace vg
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_materialBufferInfo.m_Buffer), m_materialBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_modelMatrixBufferInfo.m_Buffer), m_modelMatrixBufferInfo.m_BufferAllocation);
 
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_scratchBuffer.m_Buffer), m_scratchBuffer.m_BufferAllocation);
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_sbtInfo.m_Buffer), m_sbtInfo.m_BufferAllocation);
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_instanceBufferInfo.m_Buffer), m_instanceBufferInfo.m_BufferAllocation);
+
+
+            m_context.getDevice().destroyAccelerationStructureNV(m_topAS.m_AS);
+            vmaFreeMemory(m_context.getAllocator(), m_topAS.m_BufferAllocation);
+
+            for (const auto& as : m_bottomASs)
+            {
+                m_context.getDevice().destroyAccelerationStructureNV(as.m_AS);
+                vmaFreeMemory(m_context.getAllocator(), as.m_BufferAllocation);
+            }
+
+            m_context.getDevice().destroyPipeline(m_rayTracingPipeline);
+            m_context.getDevice().destroyPipelineLayout(m_rayTracingPipelineLayout);
+
             for(const auto& buffer : m_lightBufferInfos)
                 vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(buffer.m_Buffer), buffer.m_BufferAllocation);
 
@@ -150,12 +167,19 @@ namespace vg
             for (const auto& image : m_gbufferDepthImages)
                 vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
 
+            for (const auto& image : m_rtShadowImageInfos)
+                vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
+            for (const auto& view : m_rtShadowImageViews)
+                m_context.getDevice().destroyImageView(view);
+            for (const auto& sampler : m_rtShadowImageSamplers)
+                m_context.getDevice().destroySampler(sampler);
+
             m_context.getDevice().destroyDescriptorPool(m_combinedDescriptorPool);
 
             m_context.getDevice().destroyDescriptorSetLayout(m_gbufferDescriptorSetLayout);
             m_context.getDevice().destroyDescriptorSetLayout(m_fullScreenLightingDescriptorSetLayout);
             m_context.getDevice().destroyDescriptorSetLayout(m_lightDescriptorSetLayout);
-
+            m_context.getDevice().destroyDescriptorSetLayout(m_rayTracingDescriptorSetLayout);
 
             m_context.getDevice().destroyPipeline(m_gbufferGraphicsPipeline);
             m_context.getDevice().destroyPipelineLayout(m_gbufferPipelineLayout);
@@ -743,6 +767,7 @@ namespace vg
             pointLight.constant = 0.025f;
             pointLight.linear = 0.01f;
             pointLight.quadratic = 0.0f;
+            pointLight.radius = 1.0f;
 
             SpotLight spotLight;
             spotLight.intensity = glm::vec3(0.0f);
@@ -874,25 +899,25 @@ namespace vg
 
             // Offset Buffer
 
-            struct OffsetInfo
-            {
-                int m_vbOffset = 0;
-                int m_ibOffset = 0;
-                int m_diffTextureID = -1;
-                int m_specTextureID = -1;
-            };
+            //struct OffsetInfo
+            //{
+            //    int m_vbOffset = 0;
+            //    int m_ibOffset = 0;
+            //    int m_diffTextureID = -1;
+            //    int m_specTextureID = -1;
+            //};
 
-            std::vector<OffsetInfo> offsetInfos;
-            int32_t indexOffset0 = 0;
-            int j = 0;
-            for (const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
-            {
-                offsetInfos.push_back(OffsetInfo{ meshInfo.vertexOffset, indexOffset0, meshInfo.texIndex, meshInfo.texSpecIndex });
-                indexOffset0 += meshInfo.indexCount;
+            //std::vector<OffsetInfo> offsetInfos;
+            //int32_t indexOffset0 = 0;
+            //int j = 0;
+            //for (const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
+            //{
+            //    offsetInfos.push_back(OffsetInfo{ meshInfo.vertexOffset, indexOffset0, meshInfo.texIndex, meshInfo.texSpecIndex });
+            //    indexOffset0 += meshInfo.indexCount;
 
-                j++;
-            }
-            m_offsetBufferInfo = fillBufferTroughStagedTransfer(offsetInfos, vk::BufferUsageFlagBits::eStorageBuffer);
+            //    j++;
+            //}
+            //m_offsetBufferInfo = fillBufferTroughStagedTransfer(offsetInfos, vk::BufferUsageFlagBits::eStorageBuffer);
 
             std::vector<vk::GeometryNV> geometryVec;
 
@@ -1029,10 +1054,6 @@ namespace vg
                 count++;
             }
 
-
-
-
-
             // todo this buffer is gpu only. maybe change this to make it host visible & coherent like it is in the examples.
             // probaby wont be needed if the instanced is not transformed later on
             m_instanceBufferInfo = fillBufferTroughStagedTransfer(instances, vk::BufferUsageFlagBits::eRayTracingNV);
@@ -1153,6 +1174,12 @@ namespace vg
             );
 
             m_rayTracingPipeline = m_context.getDevice().createRayTracingPipelinesNV(nullptr, rayPipelineInfo).at(0);
+
+            // destroy shader modules:
+            m_context.getDevice().destroyShaderModule(rgenShaderModule);
+            m_context.getDevice().destroyShaderModule(ahitShaderModule);
+            m_context.getDevice().destroyShaderModule(chitShaderModule);
+            m_context.getDevice().destroyShaderModule(missShaderModule);
 
             //// 3. Create Shader Binding Table
 
@@ -1676,7 +1703,7 @@ namespace vg
         std::vector<ASInfo> m_bottomASs;
         BufferInfo m_instanceBufferInfo;
         BufferInfo m_scratchBuffer;
-        BufferInfo m_offsetBufferInfo;
+        //BufferInfo m_offsetBufferInfo;
 
         vk::DescriptorSetLayout m_rayTracingDescriptorSetLayout;
         vk::PipelineLayout m_rayTracingPipelineLayout;

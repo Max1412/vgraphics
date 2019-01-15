@@ -23,7 +23,8 @@ struct PointLight
     glm::vec3 intensity;
     float linear;
     float quadratic;
-    int32_t pad0 = 0, pad1 = 0, pad2 = 0;
+    float radius;
+    int32_t pad0 = 0, pad1 = 0;
 
 };
 

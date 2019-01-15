@@ -11,6 +11,7 @@ struct PointLight
     vec3 intensity;
     float linear;
     float quadratic;
+    float radius;
 };
 
 struct SpotLight
