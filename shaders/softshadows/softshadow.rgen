@@ -1,16 +1,39 @@
 #version 460
 #extension GL_NV_ray_tracing : require
 
+layout(location = 0) rayPayloadNV uint hitValue;
+
 layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
 layout(set = 0, binding = 1, r32f) uniform image2D image;
 layout(set = 0, binding = 2) uniform sampler2D gbufferPosSampler;
+layout(set = 0, binding = 3, rgba32ui) uniform uimage2D randTex;
 
-layout(location = 0) rayPayloadNV uint hitValue;
+
+layout (push_constant) uniform perFramePush
+{
+    mat4 view;
+    mat4 proj;
+    vec4 cameraPos;
+    int sampleCount;
+    int NUM_SAMPLES;
+} perFrame;
+
+struct RTperFrameInfo
+{
+    int frameSampleCount;
+    int shadowSampleCount;
+};
+
+layout(set = 0, binding = 4) readonly buffer rtPerFrameBuffer
+{
+    RTperFrameInfo perFrameInfo;
+};
+
 
 
 #include "light.glsl"
+#include "random.glsl"
 
-const int NUM_SAMPLES = 8;
 const float PI = 3.1415926535;
 
 float mod289(float x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
@@ -39,10 +62,10 @@ float noise(vec3 p){
     return o4.y * d.y + o4.x * (1.0 - d.y);
 }
 
-vec3 generatePointOnSphericalLight(in vec3 position, in float radius, vec3 seed, vec3 seed2)
+vec3 generatePointOnSphericalLight(in vec3 position, in float radius)
 {
-    float theta = noise(seed) * 2.0f * PI;
-    float u = (noise(seed2) * 2.0f) - 1.0f;
+    float theta = rand() * 2.0f * PI;
+    float u = (rand() * 2.0f) - 1.0f;
     float x = sqrt(1-(u*u)) * cos(theta);
     float y = sqrt(1-(u*u)) * sin(theta);
     float z = u;
@@ -54,6 +77,7 @@ void main()
     const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
     const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeNV.xy);
 
+    randomInit(ivec2(gl_LaunchIDNV.xy));
 
     vec3 origin = texture(gbufferPosSampler, inUV).xyz;
 
@@ -69,11 +93,9 @@ void main()
         PointLight currentLight = pointLights[i];
 
         //TODO tmax should also not be greater than the "radius of the influence sphere" of the point light
-
-        for(int j = 0; j < NUM_SAMPLES; j++)
-        {
-
-            vec3 pointOnLight = generatePointOnSphericalLight(currentLight.position, currentLight.radius, origin, origin + vec3(inUV, pixelCenter.y));
+        for(int j = 0; j < perFrameInfo.shadowSampleCount; j++)
+        {            
+            vec3 pointOnLight = generatePointOnSphericalLight(currentLight.position, currentLight.radius);
             tmax = length(pointOnLight - origin);
 
             vec3 direction = normalize(pointOnLight - origin);
@@ -86,8 +108,19 @@ void main()
 
             shadowValue += hitValue;
         }
-        shadowValue /= NUM_SAMPLES;
+        shadowValue /= float(perFrameInfo.shadowSampleCount);
     }
 
+    // save incrementally
+    float oldValueInc = imageLoad(image, ivec2(gl_LaunchIDNV.xy)).x;
+    float sampleCount1_inv = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
+    shadowValue = (perFrameInfo.frameSampleCount * sampleCount1_inv) * oldValueInc + sampleCount1_inv * shadowValue;
     imageStore(image, ivec2(gl_LaunchIDNV.xy), vec4(shadowValue));
+
+
+
+    // imageStore(image, ivec2(gl_LaunchIDNV.xy), vec4(shadowValue));
+
+
+    randomFinish(ivec2(gl_LaunchIDNV.xy));
 }

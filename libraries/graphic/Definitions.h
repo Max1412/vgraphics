@@ -19,6 +19,13 @@ namespace vg
 #else
     constexpr bool enableValidationLayers = true;
 #endif
+
+    struct RTperFrameInfo
+    {
+        int32_t frameSampleCount = 0;
+        int32_t shadowSampleCount = 1;
+    };
+
     struct ImageLoadInfo
     {
         unsigned char* pixels;

@@ -38,7 +38,7 @@ void LightManager::lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::Buff
                 if (ImGui::SliderFloat((std::string("Point Constant ") + std::to_string(i)).c_str(), &currentLight->constant, 0.0f, 1.0f)) {}
                 if (ImGui::SliderFloat((std::string("Point Linear ") + std::to_string(i)).c_str(), &currentLight->linear, 0.0f, 0.25f)) {}
                 if (ImGui::SliderFloat((std::string("Point Quadratic ") + std::to_string(i)).c_str(), &currentLight->quadratic, 0.0f, 0.1f)) {}
-                if (ImGui::DragFloat((std::string("Point Radius ") + std::to_string(i)).c_str(), &currentLight->radius, 0.0f, 100.0f)) {}
+                if (ImGui::DragFloat((std::string("Point Radius ") + std::to_string(i)).c_str(), &currentLight->radius, 0.25f, 0.0f, 100.0f)) {}
 
             }
         }

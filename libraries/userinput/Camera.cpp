@@ -55,12 +55,13 @@ void Camera::update(GLFWwindow* window)
             {
                 m_phi -= 2 * glm::pi<float>();
             }
+        
+            m_hasChanged = true;
         }
 
         m_oldX = static_cast<float>(x);
         m_oldY = static_cast<float>(y);
 
-        m_hasChanged = true;
     }
     else
     {
