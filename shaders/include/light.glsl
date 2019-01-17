@@ -24,6 +24,7 @@ struct SpotLight
     float quadratic;
     float cutoff;
     float outerCutoff;
+    float radius;
 };
 
 layout(set = 1, binding = 0) readonly buffer dirLightBuffer

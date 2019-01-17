@@ -420,6 +420,7 @@ namespace vg
         deviceFeatures.vertexPipelineStoresAndAtomics = VK_TRUE;
         deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
         deviceFeatures.multiDrawIndirect = VK_TRUE;
+        deviceFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
 
         vk::DeviceCreateInfo createInfo({},
             static_cast<uint32_t>(queueCreateInfos.size()), queueCreateInfos.data(),

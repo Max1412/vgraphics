@@ -51,7 +51,8 @@ layout (push_constant) uniform perFramePush
 
 #include "light.glsl"
 
-layout(set = 0, binding = 6) uniform sampler2D shadowImage;
+layout(set = 0, binding = 6) uniform sampler2DArray shadowPointImage;
+layout(set = 0, binding = 7) uniform sampler2DArray shadowSpotImage;
 
 void main() 
 {
@@ -113,7 +114,8 @@ void main()
 
     for(int i = 0; i < pointLights.length(); i++)
     {
-        float pointShadow = texture(shadowImage, inUV.xy).x;//TODO add layer for ID of point light
+        float pointShadow = texture(shadowPointImage, vec3(inUV.xy, i)).x;
+
         if(pointShadow < 0.001) continue;
 
         PointLight currentLight = pointLights[i];
@@ -142,6 +144,8 @@ void main()
 
     for(int i = 0; i < spotLights.length(); i++)
     {
+        float spotShadow = texture(shadowSpotImage, vec3(inUV.xy, i)).x;
+
         SpotLight currentLight = spotLights[i];
 
         vec3 lightDir = normalize(currentLight.position - pos);
@@ -168,7 +172,7 @@ void main()
         result.specular = currentLight.intensity * spec * attenuation * intensity;
         result.direction = lightDir;
 
-        lightingColor += (diffCol * result.diffuse + specCol * result.specular);
+        lightingColor += spotShadow * (diffCol * result.diffuse + specCol * result.specular);
     }
 
 

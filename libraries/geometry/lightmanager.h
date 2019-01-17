@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <vector>
+#include <algorithm>
 
 namespace vg {
     struct BufferInfo;
@@ -38,7 +39,8 @@ struct SpotLight
     float quadratic;
     float cutoff;
     float outerCutoff;
-    int32_t pad0 = 0, pad1 = 0;
+    float radius;
+    int32_t pad0 = 0;
 };
 
 class LightManager
@@ -51,6 +53,7 @@ public:
     const std::vector<DirectionalLight>& getDirectionalLights() const { return m_directionalLights; }
     const std::vector<PointLight>& getPointLights() const { return m_pointLights; }
     const std::vector<SpotLight>& getSpotLights() const { return m_spotLights; }
+    const int32_t getMaxNumLights() const { return std::max(std::max(m_directionalLights.size(), m_pointLights.size()), m_spotLights.size()); }
 
 private:
     std::vector<DirectionalLight> m_directionalLights;

@@ -174,11 +174,11 @@ namespace vg
     }
 
     ImageInfo BaseApp::createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usageFlags,
-        const VmaMemoryUsage properties, vk::SharingMode sharingMode, VmaAllocationCreateFlags flags) const
+        const VmaMemoryUsage properties, vk::SharingMode sharingMode, VmaAllocationCreateFlags flags, uint32_t layers) const
     {
         ImageInfo returnInfo;
 
-        vk::ImageCreateInfo createInfo({}, vk::ImageType::e2D, format, { width, height, 1 }, mipLevels, 1, vk::SampleCountFlagBits::e1, tiling, usageFlags, sharingMode);
+        vk::ImageCreateInfo createInfo({}, vk::ImageType::e2D, format, { width, height, 1 }, mipLevels, layers, vk::SampleCountFlagBits::e1, tiling, usageFlags, sharingMode);
         if (sharingMode == vk::SharingMode::eConcurrent)
         {
             vg::QueueFamilyIndices indices = m_context.findQueueFamilies(m_context.getPhysicalDevice());

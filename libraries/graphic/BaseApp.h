@@ -77,7 +77,7 @@ namespace vg
         void drawFrame();
 
         ImageInfo createImage(uint32_t width, uint32_t height, uint32_t mipLevels, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usageFlags,
-            const VmaMemoryUsage properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0) const;
+            const VmaMemoryUsage properties, vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0, uint32_t layers = 1) const;
 
         void copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) const;
 

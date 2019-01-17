@@ -778,6 +778,7 @@ namespace vg
             spotLight.quadratic = 0.0f;
             spotLight.cutoff = 1.0f;
             spotLight.outerCutoff = 0.75f;
+            spotLight.radius = 1.0f;
 
             m_lightManager = LightManager(std::vector<DirectionalLight>{dirLight}, std::vector<PointLight>{pointLight}, std::vector<SpotLight>{spotLight});
 

@@ -56,6 +56,8 @@ void LightManager::lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::Buff
                 if (ImGui::SliderFloat((std::string("Spot Quadratic ") + std::to_string(i)).c_str(), &currentLight->quadratic, 0.0f, 0.1f)) {}
                 if (ImGui::SliderFloat((std::string("Spot Cutoff ") + std::to_string(i)).c_str(), &currentLight->cutoff, 0.0f, glm::radians(90.0f))) {}
                 if (ImGui::SliderFloat((std::string("Spot Outer Cutoff ") + std::to_string(i)).c_str(), &currentLight->outerCutoff, 0.0f, glm::radians(90.0f))) {}
+                if (ImGui::DragFloat((std::string("Spot Radius ") + std::to_string(i)).c_str(), &currentLight->radius, 0.25f, 0.0f, 100.0f)) {}
+
             }
         }
         ImGui::EndMenu();
