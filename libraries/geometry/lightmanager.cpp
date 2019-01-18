@@ -9,7 +9,7 @@ LightManager::LightManager(std::vector<DirectionalLight> dirLights, std::vector<
 {
 }
 
-void LightManager::lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::BufferInfo& pointLightBuffer, const vg::BufferInfo& spotLightBuffer) const
+void LightManager::lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::BufferInfo& pointLightBuffer, const vg::BufferInfo& spotLightBuffer, const bool showRT) const
 {
     if (ImGui::BeginMenu("Lights"))
     {
@@ -25,6 +25,10 @@ void LightManager::lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::Buff
                 DirectionalLight* currentLight = reinterpret_cast<DirectionalLight*>(dirLightBuffer.m_BufferAllocInfo.pMappedData) + i;
                 if (ImGui::DragFloat3((std::string("Intensity ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->intensity))) {}
                 if (ImGui::SliderFloat3((std::string("Direction ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->direction), -1.0f, 1.0f)) {}
+                if(showRT)
+                {
+                    if (ImGui::SliderInt((std::string("Directional Shadow Samples ") + std::to_string(i)).c_str(), &currentLight->numShadowSamples, 1, 64)) {}
+                }
             }
         }
         for (size_t i = 0; i < m_pointLights.size(); i++)
@@ -39,6 +43,10 @@ void LightManager::lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::Buff
                 if (ImGui::SliderFloat((std::string("Point Linear ") + std::to_string(i)).c_str(), &currentLight->linear, 0.0f, 0.25f)) {}
                 if (ImGui::SliderFloat((std::string("Point Quadratic ") + std::to_string(i)).c_str(), &currentLight->quadratic, 0.0f, 0.1f)) {}
                 if (ImGui::DragFloat((std::string("Point Radius ") + std::to_string(i)).c_str(), &currentLight->radius, 0.25f, 0.0f, 100.0f)) {}
+                if (showRT)
+                {
+                    if (ImGui::SliderInt((std::string("Point Shadow Samples ") + std::to_string(i)).c_str(), &currentLight->numShadowSamples, 1, 64)) {}
+                }
 
             }
         }
@@ -57,6 +65,10 @@ void LightManager::lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::Buff
                 if (ImGui::SliderFloat((std::string("Spot Cutoff ") + std::to_string(i)).c_str(), &currentLight->cutoff, 0.0f, glm::radians(90.0f))) {}
                 if (ImGui::SliderFloat((std::string("Spot Outer Cutoff ") + std::to_string(i)).c_str(), &currentLight->outerCutoff, 0.0f, glm::radians(90.0f))) {}
                 if (ImGui::DragFloat((std::string("Spot Radius ") + std::to_string(i)).c_str(), &currentLight->radius, 0.25f, 0.0f, 100.0f)) {}
+                if (showRT)
+                {
+                    if (ImGui::SliderInt((std::string("Spot Shadow Samples ") + std::to_string(i)).c_str(), &currentLight->numShadowSamples, 1, 64)) {}
+                }
 
             }
         }

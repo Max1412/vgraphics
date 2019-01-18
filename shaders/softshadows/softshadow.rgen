@@ -7,19 +7,20 @@ layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
 layout(set = 0, binding = 1) uniform sampler2D gbufferPosSampler;
 layout(set = 0, binding = 2, rgba32ui) uniform uimage2D randTex;
 
-layout(set = 0, binding = 3, r32f) uniform image2DArray softShadowPointImage;
-layout(set = 0, binding = 4, r32f) uniform image2DArray softShadowSpotImage;
-
 struct RTperFrameInfo
 {
     int frameSampleCount;
-    int shadowSampleCount;
 };
 
-layout(set = 0, binding = 5) readonly buffer rtPerFrameBuffer
+layout(set = 0, binding = 3) readonly buffer rtPerFrameBuffer
 {
     RTperFrameInfo perFrameInfo;
 };
+
+layout(set = 2, binding = 0, r32f) uniform image2DArray softShadowDirectionalImage;
+layout(set = 2, binding = 1, r32f) uniform image2DArray softShadowPointImage;
+layout(set = 2, binding = 2, r32f) uniform image2DArray softShadowSpotImage;
+
 
 
 
@@ -98,6 +99,35 @@ void main()
     
     float sampleCount1_inv = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
 
+    for(int i = 0; i < dirLights.length(); i++)
+    {
+        float dirShadowValue = 0.0f;
+
+        DirectionalLight currentLight = dirLights[i];
+
+        for(int j = 0; j < currentLight.numShadowSamples; j++)
+        {            
+            //todo jitter direction
+            vec3 direction = normalize(-(currentLight.direction + 0.01 * vec3(rand(), rand(), rand())));
+
+
+            traceNV(topLevelAS, rayFlags, cullMask,
+                0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
+                origin, tmin, direction, tmax,
+                0 /*payload*/ // X here is location = X of the payload
+            );
+
+            dirShadowValue += hitValue;
+        }
+        dirShadowValue /= float(currentLight.numShadowSamples);
+
+        // save incrementally
+        float oldValue = imageLoad(softShadowDirectionalImage, ivec3(gl_LaunchIDNV.xy, i)).x;
+        dirShadowValue = (perFrameInfo.frameSampleCount * sampleCount1_inv) * oldValue + sampleCount1_inv * dirShadowValue;
+        imageStore(softShadowDirectionalImage, ivec3(gl_LaunchIDNV.xy, i), vec4(dirShadowValue));
+
+    }
+
     for(int i = 0; i < pointLights.length(); i++)
     {
         float pointShadowValue = 0.0f;
@@ -105,7 +135,7 @@ void main()
         PointLight currentLight = pointLights[i];
 
         //TODO tmax should also not be greater than the "radius of the influence sphere" of the point light
-        for(int j = 0; j < perFrameInfo.shadowSampleCount; j++)
+        for(int j = 0; j < currentLight.numShadowSamples; j++)
         {            
             vec3 pointOnLight = generatePointOnSphericalLight(currentLight.position, currentLight.radius);
             tmax = length(pointOnLight - origin);
@@ -122,7 +152,7 @@ void main()
 
             pointShadowValue += hitValue;
         }
-        pointShadowValue /= float(perFrameInfo.shadowSampleCount);
+        pointShadowValue /= float(currentLight.numShadowSamples);
 
         // save incrementally
         float oldValue = imageLoad(softShadowPointImage, ivec3(gl_LaunchIDNV.xy, i)).x;
@@ -138,7 +168,7 @@ void main()
         SpotLight currentLight = spotLights[i];
 
         //TODO tmax should also not be greater than the "radius of the influence sphere" of the point light
-        for(int j = 0; j < perFrameInfo.shadowSampleCount; j++)
+        for(int j = 0; j < currentLight.numShadowSamples; j++)
         {            
             vec3 pointOnLight = generatePointOnDiskLight(currentLight.position, currentLight.radius, normalize(currentLight.direction));
             tmax = length(pointOnLight - origin);
@@ -155,7 +185,7 @@ void main()
 
             spotShadowValue += hitValue;
         }
-        spotShadowValue /= float(perFrameInfo.shadowSampleCount);
+        spotShadowValue /= float(currentLight.numShadowSamples);
 
         // save incrementally
         float oldValue = imageLoad(softShadowSpotImage, ivec3(gl_LaunchIDNV.xy, i)).x;

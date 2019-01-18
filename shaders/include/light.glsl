@@ -1,6 +1,7 @@
 struct DirectionalLight
 {
     vec3 direction;
+    int numShadowSamples;
     vec3 intensity;
 };
 
@@ -12,6 +13,7 @@ struct PointLight
     float linear;
     float quadratic;
     float radius;
+    int numShadowSamples;
 };
 
 struct SpotLight
@@ -25,6 +27,7 @@ struct SpotLight
     float cutoff;
     float outerCutoff;
     float radius;
+    int numShadowSamples;
 };
 
 layout(set = 1, binding = 0) readonly buffer dirLightBuffer

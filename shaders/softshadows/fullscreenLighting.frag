@@ -51,8 +51,9 @@ layout (push_constant) uniform perFramePush
 
 #include "light.glsl"
 
-layout(set = 0, binding = 6) uniform sampler2DArray shadowPointImage;
-layout(set = 0, binding = 7) uniform sampler2DArray shadowSpotImage;
+layout(set = 2, binding = 0) uniform sampler2DArray shadowDirectionalImage;
+layout(set = 2, binding = 1) uniform sampler2DArray shadowPointImage;
+layout(set = 2, binding = 2) uniform sampler2DArray shadowSpotImage;
 
 void main() 
 {
@@ -91,7 +92,8 @@ void main()
     vec3 viewDir = normalize(matrices.cameraPos.xyz - pos);
     for(int i = 0; i < dirLights.length(); i++)
     {
-       
+        float dirShadow = texture(shadowDirectionalImage, vec3(inUV.xy, i)).x;
+
         DirectionalLight currentLight = dirLights[i];
         vec3 lightDir = normalize(-currentLight.direction);
         normal = normal == vec3(0.0f) ? lightDir : normal;
@@ -108,7 +110,7 @@ void main()
         result.specular = currentLight.intensity * spec;
         result.direction = lightDir;
 
-        lightingColor += (diffCol * result.diffuse + specCol * result.specular);
+        lightingColor += dirShadow * (diffCol * result.diffuse + specCol * result.specular);
         
     }
 

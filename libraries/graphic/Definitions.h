@@ -23,7 +23,6 @@ namespace vg
     struct RTperFrameInfo
     {
         int32_t frameSampleCount = 0;
-        int32_t shadowSampleCount = 1;
     };
 
     struct ImageLoadInfo

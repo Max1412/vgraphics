@@ -11,7 +11,7 @@ namespace vg {
 struct DirectionalLight
 {
     glm::vec3 direction;
-    int32_t pad0 = 0;
+    int32_t numShadowSamples = 1;
     glm::vec3 intensity;
     int32_t pad1 = 0;
 
@@ -25,7 +25,8 @@ struct PointLight
     float linear;
     float quadratic;
     float radius;
-    int32_t pad0 = 0, pad1 = 0;
+    int32_t numShadowSamples = 1;
+    int32_t pad0 = 0;
 
 };
 
@@ -40,7 +41,7 @@ struct SpotLight
     float cutoff;
     float outerCutoff;
     float radius;
-    int32_t pad0 = 0;
+    int32_t numShadowSamples = 1;
 };
 
 class LightManager
@@ -49,11 +50,11 @@ public:
     LightManager() = default;
     LightManager(std::vector<DirectionalLight> dirLights, std::vector<PointLight> pointLights, std::vector<SpotLight> spotLights);
     void lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::BufferInfo& pointLightBuffer,
-                  const vg::BufferInfo& spotLightBuffer) const;
+                  const vg::BufferInfo& spotLightBuffer, const bool showRT = false) const;
     const std::vector<DirectionalLight>& getDirectionalLights() const { return m_directionalLights; }
     const std::vector<PointLight>& getPointLights() const { return m_pointLights; }
     const std::vector<SpotLight>& getSpotLights() const { return m_spotLights; }
-    const int32_t getMaxNumLights() const { return std::max(std::max(m_directionalLights.size(), m_pointLights.size()), m_spotLights.size()); }
+    int32_t getMaxNumLights() const { return std::max(std::max(m_directionalLights.size(), m_pointLights.size()), m_spotLights.size()); }
 
 private:
     std::vector<DirectionalLight> m_directionalLights;
