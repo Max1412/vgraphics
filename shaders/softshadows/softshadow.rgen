@@ -97,7 +97,7 @@ void main()
     float tmin = 0.001;
     float tmax = 100000.0;
     
-    float sampleCount1_inv = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
+    float InvSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
 
     for(int i = 0; i < dirLights.length(); i++)
     {
@@ -107,8 +107,8 @@ void main()
 
         for(int j = 0; j < currentLight.numShadowSamples; j++)
         {            
-            //todo jitter direction
-            vec3 direction = normalize(-(currentLight.direction + 0.01 * vec3(rand(), rand(), rand())));
+            //todo jitter direction better. this converges really slowly
+            vec3 direction = normalize(-(currentLight.direction + 0.0025 * vec3(rand(), rand(), rand())));
 
 
             traceNV(topLevelAS, rayFlags, cullMask,
@@ -123,7 +123,7 @@ void main()
 
         // save incrementally
         float oldValue = imageLoad(softShadowDirectionalImage, ivec3(gl_LaunchIDNV.xy, i)).x;
-        dirShadowValue = (perFrameInfo.frameSampleCount * sampleCount1_inv) * oldValue + sampleCount1_inv * dirShadowValue;
+        dirShadowValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * dirShadowValue;
         imageStore(softShadowDirectionalImage, ivec3(gl_LaunchIDNV.xy, i), vec4(dirShadowValue));
 
     }
@@ -156,7 +156,7 @@ void main()
 
         // save incrementally
         float oldValue = imageLoad(softShadowPointImage, ivec3(gl_LaunchIDNV.xy, i)).x;
-        pointShadowValue = (perFrameInfo.frameSampleCount * sampleCount1_inv) * oldValue + sampleCount1_inv * pointShadowValue;
+        pointShadowValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * pointShadowValue;
         imageStore(softShadowPointImage, ivec3(gl_LaunchIDNV.xy, i), vec4(pointShadowValue));
 
     }
@@ -167,7 +167,6 @@ void main()
 
         SpotLight currentLight = spotLights[i];
 
-        //TODO tmax should also not be greater than the "radius of the influence sphere" of the point light
         for(int j = 0; j < currentLight.numShadowSamples; j++)
         {            
             vec3 pointOnLight = generatePointOnDiskLight(currentLight.position, currentLight.radius, normalize(currentLight.direction));
@@ -189,7 +188,7 @@ void main()
 
         // save incrementally
         float oldValue = imageLoad(softShadowSpotImage, ivec3(gl_LaunchIDNV.xy, i)).x;
-        spotShadowValue = (perFrameInfo.frameSampleCount * sampleCount1_inv) * oldValue + sampleCount1_inv * spotShadowValue;
+        spotShadowValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * spotShadowValue;
         imageStore(softShadowSpotImage, ivec3(gl_LaunchIDNV.xy, i), vec4(spotShadowValue));
     }
 

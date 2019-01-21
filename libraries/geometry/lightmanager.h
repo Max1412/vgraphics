@@ -54,7 +54,7 @@ public:
     const std::vector<DirectionalLight>& getDirectionalLights() const { return m_directionalLights; }
     const std::vector<PointLight>& getPointLights() const { return m_pointLights; }
     const std::vector<SpotLight>& getSpotLights() const { return m_spotLights; }
-    int32_t getMaxNumLights() const { return std::max(std::max(m_directionalLights.size(), m_pointLights.size()), m_spotLights.size()); }
+    size_t getMaxNumLights() const { return std::max(std::max(m_directionalLights.size(), m_pointLights.size()), m_spotLights.size()); }
 
 private:
     std::vector<DirectionalLight> m_directionalLights;

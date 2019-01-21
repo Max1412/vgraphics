@@ -567,7 +567,7 @@ namespace vg
             };
 
             std::array<vk::DescriptorSetLayout, 2> dsls = { m_fullScreenLightingDescriptorSetLayout, m_lightDescriptorSetLayout};
-            vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, dsls.size(), dsls.data(), static_cast<uint32_t>(vpcr.size()), vpcr.data());
+            vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, static_cast<int32_t>(dsls.size()), dsls.data(), static_cast<uint32_t>(vpcr.size()), vpcr.data());
 
             m_fullscreenLightingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutInfo);
 
@@ -927,7 +927,7 @@ namespace vg
                 // important: bind the descriptor set corresponding to the correct multi-buffered gbuffer resources
                 std::array<vk::DescriptorSet, 2> descSets = { m_fullScreenLightingDescriptorSets.at(i), m_lightDescritporSet };
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_fullscreenLightingPipelineLayout,
-                    0, descSets.size(), descSets.data(), 0, nullptr);
+                    0, static_cast<int32_t>(descSets.size()), descSets.data(), 0, nullptr);
 
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).draw(3, 1, 0, 0);
 

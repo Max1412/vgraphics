@@ -903,7 +903,7 @@ namespace vg
                         vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
                         VMA_MEMORY_USAGE_GPU_ONLY,
                         vk::SharingMode::eExclusive, 0,
-                        m_lightManager.getDirectionalLights().size())
+                        static_cast<int32_t>(m_lightManager.getDirectionalLights().size()))
                 );
 
                 m_rtSoftShadowPointImageInfos.push_back(
@@ -913,7 +913,7 @@ namespace vg
                         vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
                         VMA_MEMORY_USAGE_GPU_ONLY,
                         vk::SharingMode::eExclusive, 0,
-                        m_lightManager.getPointLights().size())
+                        static_cast<int32_t>(m_lightManager.getPointLights().size()))
                 );
 
                 m_rtSoftShadowSpotImageInfos.push_back(
@@ -923,7 +923,7 @@ namespace vg
                         vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
                         VMA_MEMORY_USAGE_GPU_ONLY,
                         vk::SharingMode::eExclusive, 0,
-                        m_lightManager.getPointLights().size())
+                        static_cast<int32_t>(m_lightManager.getPointLights().size()))
                 );
 
                 const vk::ImageViewCreateInfo rtShadowDirectional({},
@@ -1434,7 +1434,7 @@ namespace vg
             };
 
             std::array dss = { m_rayTracingDescriptorSetLayout, m_lightDescriptorSetLayout, m_shadowImageStoreDescriptorSetLayout };
-            vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, dss.size(), dss.data());
+            vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, static_cast<uint32_t>(dss.size()), dss.data());
 
             m_rayTracingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutCreateInfo);
 

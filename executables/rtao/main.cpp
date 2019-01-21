@@ -26,14 +26,16 @@
 #include "utility/Timer.h"
 #include "stb/stb_image.h"
 #include "geometry/lightmanager.h"
+#include <random>
+#include <execution>
 
 namespace vg
 {
 
-    class RTShadowsApp : public BaseApp
+    class RTAOApp : public BaseApp
     {
     public:
-        RTShadowsApp() :
+        RTAOApp() :
     		BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
     		m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
 			m_scene("Sponza/sponza.obj")
@@ -61,12 +63,15 @@ namespace vg
 
             createLightStuff();
             createRTResources();
+            createRTDescriptors();
 
             createGBufferDescriptors();
             createFullscreenLightingDescriptors();
 
             createGBufferPipeline();
             createFullscreenLightingPipeline();
+
+            createRandomImage();
 
             // RT
             createAccelerationStructure();
@@ -84,7 +89,7 @@ namespace vg
         }
 
         // todo clarify what is here and what is in cleanupswapchain
-        ~RTShadowsApp()
+        ~RTAOApp()
         {
             m_context.getDevice().destroyQueryPool(m_queryPool);
 
@@ -113,6 +118,9 @@ namespace vg
 
             for(const auto& buffer : m_lightBufferInfos)
                 vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(buffer.m_Buffer), buffer.m_BufferAllocation);
+
+            for (const auto& buffer : m_rtPerFrameInfoBufferInfos)
+                vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(buffer.m_Buffer), buffer.m_BufferAllocation);            
 
             m_context.getDevice().destroyImageView(m_depthImageView);
             vmaDestroyImage(m_context.getAllocator(), m_depthImage.m_Image, m_depthImage.m_ImageAllocation);
@@ -167,12 +175,18 @@ namespace vg
             for (const auto& image : m_gbufferDepthImages)
                 vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
 
-            for (const auto& image : m_rtShadowImageInfos)
+            for (const auto& image : m_rtAOImageInfos)
                 vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
-            for (const auto& view : m_rtShadowImageViews)
+            for (const auto& view : m_rtAOImageViews)
                 m_context.getDevice().destroyImageView(view);
-            for (const auto& sampler : m_rtShadowImageSamplers)
+            for (const auto& sampler : m_rtAOImageSamplers)
                 m_context.getDevice().destroySampler(sampler);
+
+            for (const auto& image : m_randomImageInfos)
+                vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
+
+            for (const auto& view : m_randomImageViews)
+                m_context.getDevice().destroyImageView(view);
 
             m_context.getDevice().destroyDescriptorPool(m_combinedDescriptorPool);
 
@@ -180,6 +194,8 @@ namespace vg
             m_context.getDevice().destroyDescriptorSetLayout(m_fullScreenLightingDescriptorSetLayout);
             m_context.getDevice().destroyDescriptorSetLayout(m_lightDescriptorSetLayout);
             m_context.getDevice().destroyDescriptorSetLayout(m_rayTracingDescriptorSetLayout);
+            m_context.getDevice().destroyDescriptorSetLayout(m_rtAOImageSampleDescriptorSetLayout);
+            m_context.getDevice().destroyDescriptorSetLayout(m_rtAOImageStoreDescriptorSetLayout);
 
             m_context.getDevice().destroyPipeline(m_gbufferGraphicsPipeline);
             m_context.getDevice().destroyPipelineLayout(m_gbufferPipelineLayout);
@@ -259,14 +275,14 @@ namespace vg
             vk::DescriptorPoolSize poolSizeAllImages(vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImageSamplers.size()));
             vk::DescriptorPoolSize poolSizeForSSBOs(vk::DescriptorType::eStorageBuffer, 7);
             vk::DescriptorPoolSize gbufferImages(vk::DescriptorType::eCombinedImageSampler, 3);
-            vk::DescriptorPoolSize shadowImage(vk::DescriptorType::eStorageImage, 1);
+            vk::DescriptorPoolSize rtaoImage(vk::DescriptorType::eStorageImage, 1);
             vk::DescriptorPoolSize rtOutputImage(vk::DescriptorType::eStorageImage, 1);
             vk::DescriptorPoolSize rtAS(vk::DescriptorType::eAccelerationStructureNV, 1);
 
-            std::array poolSizes = { poolSizeForSSBOs, gbufferImages, poolSizeAllImages, rtOutputImage, rtAS };
+            std::array poolSizes = { poolSizeForSSBOs, gbufferImages, poolSizeAllImages, rtOutputImage, rtAS, rtaoImage };
 
 
-            vk::DescriptorPoolCreateInfo poolInfo({}, 2 * static_cast<uint32_t>(m_swapChainFramebuffers.size()) + 2, static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
+            vk::DescriptorPoolCreateInfo poolInfo({}, 4 * static_cast<uint32_t>(m_swapChainFramebuffers.size()) + 2, static_cast<uint32_t>(poolSizes.size()), poolSizes.data());
 
             m_combinedDescriptorPool = m_context.getDevice().createDescriptorPool(poolInfo);
         }
@@ -369,8 +385,8 @@ namespace vg
             //vk::PipelineDynamicStateCreateInfo dynamicState({}, dynamicStates.size(), dynamicStates.data());
 
             // push view & proj matrix
-            std::array<vk::PushConstantRange, 1> vpcr = {
-                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4)},
+            std::array vpcr = {
+                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4)}
             };
 
             vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, 1, &m_gbufferDescriptorSetLayout, static_cast<uint32_t>(vpcr.size()), vpcr.data());
@@ -548,7 +564,7 @@ namespace vg
         {
 
             const auto vertShaderCode = Utility::readFile("deferred/fullscreen.vert.spv");
-            const auto fragShaderCode = Utility::readFile("rtshadows/fullscreenLighting.frag.spv");
+            const auto fragShaderCode = Utility::readFile("rtao/fullscreenLighting.frag.spv");
 
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
@@ -595,12 +611,11 @@ namespace vg
 
 
             // push view & proj matrix
-            std::array<vk::PushConstantRange, 1> vpcr = {
-                // view & proj (mat4) + pos (vec4)
+            std::array vpcr = {
                 vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4)}
             };
 
-            std::array<vk::DescriptorSetLayout, 2> dsls = { m_fullScreenLightingDescriptorSetLayout, m_lightDescriptorSetLayout};
+            std::array dsls = { m_fullScreenLightingDescriptorSetLayout, m_lightDescriptorSetLayout, m_rtAOImageSampleDescriptorSetLayout };
             vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, static_cast<uint32_t>(dsls.size()), dsls.data(), static_cast<uint32_t>(vpcr.size()), vpcr.data());
 
             m_fullscreenLightingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutInfo);
@@ -638,7 +653,6 @@ namespace vg
             vk::DescriptorSetLayoutBinding normalTextureBinding(3, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
             vk::DescriptorSetLayoutBinding uvTextureBinding(4, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
             vk::DescriptorSetLayoutBinding materialSSBOBinding(5, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
-            vk::DescriptorSetLayoutBinding shadowImageBinding(6, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
 
             std::array bindings = {
                 perMeshInformationIndirectDrawSSBOLB,
@@ -646,8 +660,7 @@ namespace vg
                 positionTextureBinding,
                 normalTextureBinding,
                 uvTextureBinding,
-                materialSSBOBinding,
-                shadowImageBinding
+                materialSSBOBinding
             };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
@@ -687,18 +700,13 @@ namespace vg
                 vk::DescriptorBufferInfo materialInfo(m_materialBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
                 vk::WriteDescriptorSet descWriteMaterialInfo(m_fullScreenLightingDescriptorSets.at(i), 5, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &materialInfo, nullptr);
 
-                vk::DescriptorImageInfo shadowImageInfo(m_rtShadowImageSamplers.at(i), m_rtShadowImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
-                vk::WriteDescriptorSet shadowImageWrite(m_fullScreenLightingDescriptorSets.at(i), 6, 0, 1, vk::DescriptorType::eCombinedImageSampler, &shadowImageInfo, nullptr, nullptr);
-
-
                 std::array descriptorWrites = { 
                     descWritePerMeshInfo, 
                     descWriteAllImages,
                     descWriteGBufferPos,
                     descWriteGBufferNormal,
                     descWriteGBufferUV,
-                    descWriteMaterialInfo,
-                    shadowImageWrite 
+                    descWriteMaterialInfo
                 };
 
                 m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
@@ -758,19 +766,31 @@ namespace vg
         void createLightStuff()
         {
             DirectionalLight dirLight;
-            dirLight.intensity = glm::vec3(15.0f);
+            dirLight.intensity = glm::vec3(0.0f);
             dirLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
+            dirLight.numShadowSamples = 2;
 
             PointLight pointLight;
-            pointLight.intensity = glm::vec3(0.0f);
+            pointLight.intensity = glm::vec3(15.0f, 0.0f, 0.0f);
             pointLight.position = glm::vec3(0.0f, 100.0f, 0.0f);
             pointLight.constant = 0.025f;
             pointLight.linear = 0.01f;
             pointLight.quadratic = 0.0f;
             pointLight.radius = 1.0f;
+            pointLight.numShadowSamples = 2;
+
+            PointLight pointLight2;
+            pointLight2.intensity = glm::vec3(0.0f, 15.0, 0.0f);
+            pointLight2.position = glm::vec3(0.0f, 100.0f, 100.0f);
+            pointLight2.constant = 0.025f;
+            pointLight2.linear = 0.01f;
+            pointLight2.quadratic = 0.0f;
+            pointLight2.radius = 1.0f;
+            pointLight2.numShadowSamples = 2;
+
 
             SpotLight spotLight;
-            spotLight.intensity = glm::vec3(0.0f);
+            spotLight.intensity = glm::vec3(0.0f, 0.0f, 15.0f);
             spotLight.position = glm::vec3(0.0f, 100.0f, 0.0f);
             spotLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
             spotLight.constant = 0.025f;
@@ -779,8 +799,21 @@ namespace vg
             spotLight.cutoff = 1.0f;
             spotLight.outerCutoff = 0.75f;
             spotLight.radius = 1.0f;
+            spotLight.numShadowSamples = 2;
 
-            m_lightManager = LightManager(std::vector<DirectionalLight>{dirLight}, std::vector<PointLight>{pointLight}, std::vector<SpotLight>{spotLight});
+            SpotLight spotLight2;
+            spotLight2.intensity = glm::vec3(15.0f, 15.0f, 0.0f);
+            spotLight2.position = glm::vec3(0.0f, 100.0f, 0.0f);
+            spotLight2.direction = glm::vec3(0.0f, 0.0f, 1.0f);
+            spotLight2.constant = 0.025f;
+            spotLight2.linear = 0.01f;
+            spotLight2.quadratic = 0.0f;
+            spotLight2.cutoff = 1.0f;
+            spotLight2.outerCutoff = 0.75f;
+            spotLight2.radius = 1.0f;
+            spotLight2.numShadowSamples = 2;
+
+            m_lightManager = LightManager(std::vector<DirectionalLight>{dirLight}, std::vector<PointLight>{pointLight, pointLight2}, std::vector<SpotLight>{spotLight, spotLight2});
 
             
             // create buffers for lights. buffers are persistently mapped //TODO make lightmanager manage the light buffers with functions for access
@@ -834,53 +867,59 @@ namespace vg
 
         void createRTResources()
         {
-            // "shadow images": uvec4 images to store shadows ("light source non-visibility") as a bitfield
-            // multi-buffered for whatever reason
             const auto ext = m_context.getSwapChainExtent();
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+
+         
+
+            // rtao image : float32 image.
+
+            // multi-buffered for whatever reason
 
             for (size_t i = 0; i < m_context.getSwapChainImages().size(); i++)
             {
                 // image
-                m_rtShadowImageInfos.push_back(
+
+                m_rtAOImageInfos.push_back(
                     createImage(ext.width, ext.height, 1,
-                        vk::Format::eR32G32B32A32Uint,
+                        vk::Format::eR32Sfloat,
                         vk::ImageTiling::eOptimal,
-                        vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
-                        VMA_MEMORY_USAGE_GPU_ONLY)
+                        vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+                        VMA_MEMORY_USAGE_GPU_ONLY,
+                        vk::SharingMode::eExclusive, 0,
+                        1)
                 );
 
-                const vk::ImageViewCreateInfo rtShadow({},
-                    m_rtShadowImageInfos.at(i).m_Image,
+                const vk::ImageViewCreateInfo rtAOPoint({},
+                    m_rtAOImageInfos.at(i).m_Image,
                     vk::ImageViewType::e2D,
-                    vk::Format::eR32G32B32A32Uint,
+                    vk::Format::eR32Sfloat,
                     {},
-                    { vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(i).mipLevels, 0, 1 });
-                m_rtShadowImageViews.push_back(m_context.getDevice().createImageView(rtShadow));
+                    { vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS });
+                m_rtAOImageViews.push_back(m_context.getDevice().createImageView(rtAOPoint));
 
-                vk::SamplerCreateInfo samplerRTShadow({},
-                    vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
+                vk::SamplerCreateInfo samplerRTAOPoint({},
+                    vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest, //TODO maybe actually filter those, especially when using half-res
                     vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
                     0.0f, false, 1.0f, false, vk::CompareOp::eAlways, 0.0f,
-                    static_cast<float>(m_rtShadowImageInfos.at(i).mipLevels),
+                    static_cast<float>(m_rtAOImageInfos.at(i).mipLevels),
                     vk::BorderColor::eIntOpaqueBlack, false);
-                m_rtShadowImageSamplers.push_back(m_context.getDevice().createSampler(samplerRTShadow));
+                m_rtAOImageSamplers.push_back(m_context.getDevice().createSampler(samplerRTAOPoint));
 
 
                 // transition images to use them for the first time
 
-                vk::ImageMemoryBarrier barrierShadowTOFS(
+                vk::ImageMemoryBarrier barrierAOSpotTOFS(
                     {}, vk::AccessFlagBits::eShaderRead,
                     vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal,
                     VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                    m_rtShadowImageInfos.at(i).m_Image,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(i).mipLevels, 0, VK_REMAINING_ARRAY_LAYERS)
+                    m_rtAOImageInfos.at(i).m_Image,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
                 );
 
                 cmdBuf.pipelineBarrier(
                     vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eFragmentShader,
-                    vk::DependencyFlagBits::eByRegion, 0, nullptr, 0, nullptr,
-                    1, &barrierShadowTOFS
+                    vk::DependencyFlagBits::eByRegion, {}, {}, barrierAOSpotTOFS
                 );
 
 
@@ -889,6 +928,148 @@ namespace vg
 
           
         }
+
+        void createRTDescriptors()
+        {
+            // inputs
+            using ssf = vk::ShaderStageFlagBits;
+            vk::DescriptorSetLayoutBinding rtaoDirImageBinding  (0, vk::DescriptorType::eCombinedImageSampler, 1, ssf::eFragment, nullptr);
+
+            std::array bindings = {
+                rtaoDirImageBinding
+            };
+
+            vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
+
+            m_rtAOImageSampleDescriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo);
+
+            // create n descriptor sets, 1 for each multi-buffered gbuffer
+            std::vector<vk::DescriptorSetLayout> dsls(m_swapChainFramebuffers.size(), m_rtAOImageSampleDescriptorSetLayout);
+            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_combinedDescriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), dsls.data());
+            m_rtAOImageSampleDescriptorSets = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo);
+
+
+            using ssf = vk::ShaderStageFlagBits;
+            vk::DescriptorSetLayoutBinding rtaoDirImageBinding1(0, vk::DescriptorType::eStorageImage, 1, ssf::eRaygenNV, nullptr);
+
+            std::array bindings1 = {
+                rtaoDirImageBinding1
+            };
+
+            vk::DescriptorSetLayoutCreateInfo layoutInfo1({}, static_cast<uint32_t>(bindings1.size()), bindings1.data());
+
+            m_rtAOImageStoreDescriptorSetLayout = m_context.getDevice().createDescriptorSetLayout(layoutInfo1);
+
+            // create n descriptor sets, 1 for each multi-buffered gbuffer
+            std::vector<vk::DescriptorSetLayout> dsls1(m_swapChainFramebuffers.size(), m_rtAOImageStoreDescriptorSetLayout);
+            vk::DescriptorSetAllocateInfo desSetAllocInfo1(m_combinedDescriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), dsls1.data());
+            m_rtAOImageStoreDescriptorSets = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo1);
+
+
+
+            
+            for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
+            {
+
+                // sampling descriptor set
+                vk::DescriptorImageInfo rtaoPointSampleImageInfo(m_rtAOImageSamplers.at(i), m_rtAOImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
+                vk::WriteDescriptorSet rtaoPointSampleImageWrite(m_rtAOImageSampleDescriptorSets.at(i), 0, 0, 1, vk::DescriptorType::eCombinedImageSampler, &rtaoPointSampleImageInfo, nullptr, nullptr);
+
+                // store descriptor set
+                vk::DescriptorImageInfo rtaoPointStoreImageInfo(nullptr, m_rtAOImageViews.at(i), vk::ImageLayout::eGeneral);
+                vk::WriteDescriptorSet rtaoPointStoreImageWrite(m_rtAOImageStoreDescriptorSets.at(i), 0, 0, 1, vk::DescriptorType::eStorageImage, &rtaoPointStoreImageInfo, nullptr, nullptr);
+
+                std::array descriptorWrites = {
+                    rtaoPointSampleImageWrite,
+                    rtaoPointStoreImageWrite
+                };
+
+                m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
+            }
+        }
+
+        void createRandomImage()
+        {
+            const auto ext = m_context.getSwapChainExtent();
+
+            vk::DeviceSize imageSize = ext.width * ext.height * 4;
+            auto sizeInBytes = imageSize * sizeof(uint32_t);
+            std::vector<uint32_t> seedData(imageSize);
+            std::random_device rd;
+            std::mt19937 mt(rd());
+            std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+            std::for_each(std::execution::par, seedData.begin(), seedData.end(), [&seedData, &dist, &mt](auto &n)
+            {
+                n = (128 + static_cast<int32_t>(dist(mt) * seedData.size()));
+            });
+
+            auto stagingBuffer = createBuffer(sizeInBytes, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+            memcpy(stagingBuffer.m_BufferAllocInfo.pMappedData, seedData.data(), sizeInBytes);
+
+            auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+
+            // multi-buffered random image
+            for(size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
+            {
+                using us = vk::ImageUsageFlagBits;
+                m_randomImageInfos.push_back(createImage(ext.width, ext.height, 1, vk::Format::eR32G32B32A32Uint, vk::ImageTiling::eOptimal,
+                    us::eTransferDst | us::eStorage, VMA_MEMORY_USAGE_GPU_ONLY));
+
+                // transition image to transfer
+                vk::ImageMemoryBarrier barrierRandomToTransfer(
+                    {}, vk::AccessFlagBits::eTransferWrite,
+                    vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                    m_randomImageInfos.at(i).m_Image,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
+                );
+
+                cmdBuf.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer,
+                    {}, 0, nullptr, 0, nullptr,
+                    1, &barrierRandomToTransfer
+                );
+
+                // copy data to image
+                vk::ImageSubresourceLayers subreslayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1);
+                vk::BufferImageCopy region(0, 0, 0, subreslayers, { 0, 0, 0 }, { ext.width, ext.height, 1 });
+                cmdBuf.copyBufferToImage(stagingBuffer.m_Buffer, m_randomImageInfos.at(i).m_Image, vk::ImageLayout::eTransferDstOptimal, region);
+
+                // transition image to load/store
+                vk::ImageMemoryBarrier barrierRandomFromTransferToStore(
+                    vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite,
+                    vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eGeneral,
+                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                    m_randomImageInfos.at(i).m_Image,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
+                );
+
+                cmdBuf.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                    {}, 0, nullptr, 0, nullptr,
+                    1, &barrierRandomFromTransferToStore
+                );
+
+                // create view
+                const vk::ImageViewCreateInfo randomViewInfo({},
+                    m_randomImageInfos.at(i).m_Image,
+                    vk::ImageViewType::e2D,
+                    vk::Format::eR32G32B32A32Uint,
+                    {},
+                    { vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS });
+                m_randomImageViews.push_back(m_context.getDevice().createImageView(randomViewInfo));
+            }
+            endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+
+            vmaDestroyBuffer(m_context.getAllocator(), stagingBuffer.m_Buffer, stagingBuffer.m_BufferAllocation);
+
+            m_sampleCounts = std::vector<int32_t>(m_swapChainFramebuffers.size(), 0);
+            std::vector<RTperFrameInfo> initdata(1);
+            for(int i = 0; i < m_swapChainFramebuffers.size(); i++)
+                m_rtPerFrameInfoBufferInfos.push_back(fillBufferTroughStagedTransfer(initdata, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst));
+        }
+
 
         void createAccelerationStructure()
         {
@@ -1119,10 +1300,11 @@ namespace vg
             // AS
             vk::DescriptorSetLayoutBinding asLB(0, vk::DescriptorType::eAccelerationStructureNV, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
             // Image Load/Store for output
-            vk::DescriptorSetLayoutBinding oiLB(1, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-            vk::DescriptorSetLayoutBinding gbufferPos(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+            vk::DescriptorSetLayoutBinding gbufferPos(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+            vk::DescriptorSetLayoutBinding randomImageLB(2, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+            vk::DescriptorSetLayoutBinding rtPerFrame(3, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
 
-            std::array<vk::DescriptorSetLayoutBinding, 3> bindings = { asLB, oiLB, gbufferPos };
+            std::array bindings = { asLB, gbufferPos, randomImageLB, rtPerFrame };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
@@ -1130,20 +1312,20 @@ namespace vg
 
             //// 2. Create Pipeline
 
-            const auto rgenShaderCode = Utility::readFile("rtshadows/shadowtest.rgen.spv");
+            const auto rgenShaderCode = Utility::readFile("rtao/rtao.rgen.spv");
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 
-            const auto ahitShaderCode = Utility::readFile("rtshadows/shadowtest.rahit.spv");
+            const auto ahitShaderCode = Utility::readFile("rtao/rtao.rahit.spv");
             const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
-            const auto chitShaderCode = Utility::readFile("rtshadows/shadowtest.rchit.spv");
+            const auto chitShaderCode = Utility::readFile("rtao/rtao.rchit.spv");
             const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
 
-            const auto missShaderCode = Utility::readFile("rtshadows/shadowtest.rmiss.spv");
+            const auto missShaderCode = Utility::readFile("rtao/rtao.rmiss.spv");
             const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
 
-            const std::array rtShaderStageInfos = {
+            std::array rtShaderStageInfos = {
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eAnyHitNV, ahitShaderModule, "main"),
@@ -1151,8 +1333,8 @@ namespace vg
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main")
             };
 
-            std::array<vk::DescriptorSetLayout, 2> dss = { m_rayTracingDescriptorSetLayout, m_lightDescriptorSetLayout };
-            vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, static_cast<int32_t>(dss.size()), dss.data());
+            std::array dss = { m_rayTracingDescriptorSetLayout, m_lightDescriptorSetLayout, m_rtAOImageStoreDescriptorSetLayout };
+            vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, static_cast<uint32_t>(dss.size()), dss.data());
 
             m_rayTracingPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutCreateInfo);
 
@@ -1198,12 +1380,14 @@ namespace vg
 
             // deviation from tutorial: I'm creating multiple descriptor sets, and binding the one with the current swap chain image
 
+            if (m_rayTracingDescriptorSets.empty())
+            {
+                // create n descriptor sets
+                std::vector<vk::DescriptorSetLayout> dsls(m_swapChainFramebuffers.size(), m_rayTracingDescriptorSetLayout);
+                vk::DescriptorSetAllocateInfo desSetAllocInfo(m_combinedDescriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), dsls.data());
+                m_rayTracingDescriptorSets = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo);
+            }
 
-
-            // create n descriptor sets
-            std::vector<vk::DescriptorSetLayout> dsls(m_swapChainFramebuffers.size(), m_rayTracingDescriptorSetLayout);
-            vk::DescriptorSetAllocateInfo desSetAllocInfo(m_combinedDescriptorPool, static_cast<uint32_t>(m_swapChainFramebuffers.size()), dsls.data());
-            m_rayTracingDescriptorSets = m_context.getDevice().allocateDescriptorSets(desSetAllocInfo);
 
 
             for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
@@ -1212,16 +1396,17 @@ namespace vg
                 vk::WriteDescriptorSet accelerationStructureWrite(m_rayTracingDescriptorSets.at(i), 0, 0, 1, vk::DescriptorType::eAccelerationStructureNV, nullptr, nullptr, nullptr);
                 accelerationStructureWrite.setPNext(&descriptorSetAccelerationStructureInfo); // pNext is assigned here!!!
 
-                // the tutorial always writes to the same image. Here, multiple descriptor sets each corresponding to a swapchain image are created
-                //TODO write into "shadow image" instead of swapchain image
-                vk::DescriptorImageInfo descriptorOutputImageInfo(nullptr, m_rtShadowImageViews.at(i), vk::ImageLayout::eGeneral);
-                vk::WriteDescriptorSet outputImageWrite(m_rayTracingDescriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eStorageImage, &descriptorOutputImageInfo, nullptr, nullptr);
-
                 vk::DescriptorImageInfo descriptorGBufferPosImageInfo(m_gbufferPositionSamplers.at(i), m_gbufferPositionImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
-                vk::WriteDescriptorSet gbufferPosImageWrite(m_rayTracingDescriptorSets.at(i), 2, 0, 1, vk::DescriptorType::eCombinedImageSampler, &descriptorGBufferPosImageInfo, nullptr, nullptr);
+                vk::WriteDescriptorSet gbufferPosImageWrite(m_rayTracingDescriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &descriptorGBufferPosImageInfo, nullptr, nullptr);
+
+                vk::DescriptorImageInfo randomImageInfo(nullptr, m_randomImageViews.at(i), vk::ImageLayout::eGeneral);
+                vk::WriteDescriptorSet randomImageWrite(m_rayTracingDescriptorSets.at(i), 2, 0, 1, vk::DescriptorType::eStorageImage, &randomImageInfo, nullptr, nullptr);
+
+                vk::DescriptorBufferInfo rtPerFrameInfo(m_rtPerFrameInfoBufferInfos.at(i).m_Buffer, 0, VK_WHOLE_SIZE);
+                vk::WriteDescriptorSet  rtPerFrameWrite(m_rayTracingDescriptorSets.at(i), 3, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &rtPerFrameInfo, nullptr);
 
 
-                std::array<vk::WriteDescriptorSet, 3> descriptorWrites = { accelerationStructureWrite, outputImageWrite, gbufferPosImageWrite };
+                std::array descriptorWrites = { accelerationStructureWrite, gbufferPosImageWrite, randomImageWrite, rtPerFrameWrite };
                 m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
             }
         }
@@ -1254,11 +1439,12 @@ namespace vg
         void createPerFrameInformation()
         {
             m_camera = Pilotview(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height);
-            m_camera.setSensitivity(0.01f);
+            m_camera.setSensitivity(0.1f);
             m_projection = glm::perspective(glm::radians(45.0f), m_context.getSwapChainExtent().width / static_cast<float>(m_context.getSwapChainExtent().height), 0.1f, 10000.0f);
             m_projection[1][1] *= -1;
 
             m_camera.update(m_context.getWindow());
+            m_camera.resetChangeFlag();
 
         }
 
@@ -1326,9 +1512,7 @@ namespace vg
 
 
             // dynamic secondary buffers (containing per-frame information), getting re-recorded if necessary
-            m_perFrameSecondaryCommandBuffers = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
-
-            
+            m_perFrameSecondaryCommandBuffers = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);          
 
             // fill static command buffers:
             for (size_t i = 0; i < m_gbufferSecondaryCommandBuffers.size(); i++)
@@ -1361,7 +1545,7 @@ namespace vg
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_fullscreenLightingPipeline);
 
                 // important: bind the descriptor set corresponding to the correct multi-buffered gbuffer resources
-                std::array<vk::DescriptorSet, 2> descSets = { m_fullScreenLightingDescriptorSets.at(i), m_lightDescritporSet };
+                std::array descSets = { m_fullScreenLightingDescriptorSets.at(i), m_lightDescritporSet, m_rtAOImageSampleDescriptorSets.at(i) };
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_fullscreenLightingPipelineLayout,
                     0, static_cast<uint32_t>(descSets.size()), descSets.data(), 0, nullptr);
 
@@ -1371,15 +1555,16 @@ namespace vg
 
 
 
-                //// ray tracing (for shadows) command buffers
+                //// ray tracing (for rtao) command buffers
                 vk::CommandBufferInheritanceInfo inheritanceInfo3(nullptr, 0, nullptr, 0, {}, {});
                 vk::CommandBufferBeginInfo beginInfo3(vk::CommandBufferUsageFlagBits::eSimultaneousUse , &inheritanceInfo3);
                 m_rayTracingSecondaryCommandBuffers.at(i).begin(beginInfo3);
 
                 m_rayTracingSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipeline);
-                std::array<vk::DescriptorSet, 2> dss = { m_rayTracingDescriptorSets.at(i), m_lightDescritporSet };
+                std::array dss = { m_rayTracingDescriptorSets.at(i), m_lightDescritporSet, m_rtAOImageStoreDescriptorSets.at(i) };
                 m_rayTracingSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rayTracingPipelineLayout,
                     0, static_cast<uint32_t>(dss.size()), dss.data(), 0, nullptr);
+
 
                 // transition gbuffer images to read it in RT //TODO transition back?
                 vk::ImageMemoryBarrier barrierGBposTORT(
@@ -1387,16 +1572,16 @@ namespace vg
                     vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
                     VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
                     m_gbufferPositionImageInfos.at(i).m_Image,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferPositionImageInfos.at(i).mipLevels, 0, VK_REMAINING_ARRAY_LAYERS)
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
                 );
 
                 vk::ImageMemoryBarrier barrierGBnormalTORT = barrierGBposTORT;
                 barrierGBnormalTORT.setImage(m_gbufferNormalImageInfos.at(i).m_Image);
-                barrierGBnormalTORT.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferNormalImageInfos.at(i).mipLevels, 0, VK_REMAINING_ARRAY_LAYERS));
+                barrierGBnormalTORT.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS));
 
                 vk::ImageMemoryBarrier barrierGBuvTORT = barrierGBposTORT;
                 barrierGBuvTORT.setImage(m_gbufferUVImageInfos.at(i).m_Image);
-                barrierGBuvTORT.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_gbufferUVImageInfos.at(0).mipLevels, 0, VK_REMAINING_ARRAY_LAYERS));
+                barrierGBuvTORT.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS));
 
 
                 std::array gBufferBarriers = { barrierGBposTORT, barrierGBnormalTORT, barrierGBuvTORT };
@@ -1406,19 +1591,18 @@ namespace vg
                     vk::DependencyFlagBits::eByRegion, {}, {}, gBufferBarriers
                 );
 
-                // transition shadow image to write to it in raygen shader
-                vk::ImageMemoryBarrier barrierShadowTORT(
+                // transition rtao image to write to it in raygen shader
+                vk::ImageMemoryBarrier barrierPointrtaoTORT(
                     vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite,
                     vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
                     VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                    m_rtShadowImageInfos.at(i).m_Image,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(i).mipLevels, 0, VK_REMAINING_ARRAY_LAYERS)
+                    m_rtAOImageInfos.at(i).m_Image,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
                 );
 
                 m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
                     vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
-                    vk::DependencyFlagBits::eByRegion, 0, nullptr, 0, nullptr,
-                    1, &barrierShadowTORT
+                    vk::DependencyFlagBits::eByRegion, {}, {}, barrierPointrtaoTORT
                 );
 
 
@@ -1432,19 +1616,18 @@ namespace vg
                 );
 
 
-                // transition image to read it in the fullscreen lighting shader //TODO transition back
-                vk::ImageMemoryBarrier barrierShadowTOFS(
+                // transition image to read it in the fullscreen lighting shader
+                vk::ImageMemoryBarrier barrierPointrtaoTOFS(
                     vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
                     vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
                     VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-                    m_rtShadowImageInfos.at(i).m_Image,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, m_rtShadowImageInfos.at(i).mipLevels, 0, 1)
+                    m_rtAOImageInfos.at(i).m_Image,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
                 );
 
                 m_rayTracingSecondaryCommandBuffers.at(i).pipelineBarrier(
                     vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
-                    vk::DependencyFlagBits::eByRegion, 0, nullptr, 0, nullptr,
-                    1, &barrierShadowTOFS
+                    vk::DependencyFlagBits::eByRegion, {}, {}, barrierPointrtaoTOFS
                 );
 
                 m_rayTracingSecondaryCommandBuffers.at(i).end();
@@ -1462,13 +1645,12 @@ namespace vg
 
             m_perFrameSecondaryCommandBuffers.at(currentImage).begin(beginInfo1);
 
-            m_camera.update(m_context.getWindow());
+            m_camera.update(m_context.getWindow()); // reset is later in this function
 
             m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_gbufferPipelineLayout, 
                 vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
                 0, sizeof(glm::mat4),
                 glm::value_ptr(m_camera.getView()));
-            m_camera.resetChangeFlag();
 
             m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_gbufferPipelineLayout,
                 vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
@@ -1508,9 +1690,41 @@ namespace vg
 
             m_commandBuffers.at(currentImage).endRenderPass();
 
-            // execute command buffers for RT shadows
-            m_commandBuffers.at(currentImage).executeCommands(m_rayTracingSecondaryCommandBuffers.at(currentImage));
+            // upload per-frame information for RT
+            vk::BufferMemoryBarrier rtPerFrameToTranser(
+                vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eTransferWrite,
+                VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, 0, VK_WHOLE_SIZE
+            );
 
+            m_commandBuffers.at(currentImage).pipelineBarrier(
+                vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eTransfer,
+                vk::DependencyFlagBits::eByRegion, nullptr, rtPerFrameToTranser, nullptr
+            );
+
+            if (m_camera.hasChanged() || !m_accumulateRTSamples)
+            {
+                for (auto& n : m_sampleCounts)
+                    n = 0;
+                m_camera.resetChangeFlag();
+            }
+            
+            m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, 0, sizeof(int32_t), &m_sampleCounts.at(currentImage));
+            m_sampleCounts.at(currentImage)++;
+
+            vk::BufferMemoryBarrier rtPerFrameToRead(
+                vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+                VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, 0, VK_WHOLE_SIZE
+            );
+
+            m_commandBuffers.at(currentImage).pipelineBarrier(
+                vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                vk::DependencyFlagBits::eByRegion, nullptr, rtPerFrameToRead, nullptr
+            );
+
+            // execute command buffers for RT 
+            m_commandBuffers.at(currentImage).executeCommands(m_rayTracingSecondaryCommandBuffers.at(currentImage));
 
             // 2nd renderpass: render into swapchain
             vk::ClearValue clearValue2(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
@@ -1559,9 +1773,12 @@ namespace vg
                     }
                     ImGui::EndMenu();
                 }
-                m_lightManager.lightGUI(m_lightBufferInfos.at(0), m_lightBufferInfos.at(1), m_lightBufferInfos.at(2));
-                
-
+                m_lightManager.lightGUI(m_lightBufferInfos.at(0), m_lightBufferInfos.at(1), m_lightBufferInfos.at(2), true);
+                if (ImGui::BeginMenu("Ray Tracing"))
+                {
+                    ImGui::Checkbox("Accumulate Ray Tracing Samples", &m_accumulateRTSamples);
+                    ImGui::EndMenu();
+                }
                 if(m_imguiShowDemoWindow) ImGui::ShowDemoWindow();
 
                 m_timer.drawGUI();
@@ -1711,21 +1928,32 @@ namespace vg
         vk::Pipeline m_rayTracingPipeline;
         std::vector<vk::DescriptorSet> m_rayTracingDescriptorSets;
         BufferInfo m_sbtInfo;
+        
+        // rtao
+        bool m_accumulateRTSamples = true;
 
-        // multi-buffered RT output images
-        std::vector<ImageInfo> m_rtShadowImageInfos;
-        std::vector<vk::ImageView> m_rtShadowImageViews;
-        std::vector<vk::Sampler> m_rtShadowImageSamplers;
+        std::vector<ImageInfo> m_rtAOImageInfos;
+        std::vector<vk::ImageView> m_rtAOImageViews;
+        std::vector<vk::Sampler> m_rtAOImageSamplers;
+
+        vk::DescriptorSetLayout m_rtAOImageStoreDescriptorSetLayout;
+        vk::DescriptorSetLayout m_rtAOImageSampleDescriptorSetLayout;
+        std::vector<vk::DescriptorSet> m_rtAOImageSampleDescriptorSets;
+        std::vector<vk::DescriptorSet> m_rtAOImageStoreDescriptorSets;
 
         std::vector<vk::CommandBuffer> m_rayTracingSecondaryCommandBuffers;
 
+        std::vector<ImageInfo> m_randomImageInfos;
+        std::vector<vk::ImageView> m_randomImageViews;
 
+        std::vector<int32_t> m_sampleCounts;
+        std::vector<BufferInfo> m_rtPerFrameInfoBufferInfos;
     };
 }
 
 int main()
 {
-    vg::RTShadowsApp app;
+    vg::RTAOApp app;
 
     try
     {
