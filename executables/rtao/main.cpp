@@ -1301,10 +1301,11 @@ namespace vg
             vk::DescriptorSetLayoutBinding asLB(0, vk::DescriptorType::eAccelerationStructureNV, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
             // Image Load/Store for output
             vk::DescriptorSetLayoutBinding gbufferPos(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-            vk::DescriptorSetLayoutBinding randomImageLB(2, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-            vk::DescriptorSetLayoutBinding rtPerFrame(3, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+            vk::DescriptorSetLayoutBinding gbufferNormal(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+            vk::DescriptorSetLayoutBinding randomImageLB(3, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+            vk::DescriptorSetLayoutBinding rtPerFrame(4, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
 
-            std::array bindings = { asLB, gbufferPos, randomImageLB, rtPerFrame };
+            std::array bindings = { asLB, gbufferPos, gbufferNormal, randomImageLB, rtPerFrame };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
@@ -1399,14 +1400,17 @@ namespace vg
                 vk::DescriptorImageInfo descriptorGBufferPosImageInfo(m_gbufferPositionSamplers.at(i), m_gbufferPositionImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
                 vk::WriteDescriptorSet gbufferPosImageWrite(m_rayTracingDescriptorSets.at(i), 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &descriptorGBufferPosImageInfo, nullptr, nullptr);
 
+                vk::DescriptorImageInfo descriptorGBufferNormalImageInfo(m_gbufferNormalSamplers.at(i), m_gbufferNormalImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
+                vk::WriteDescriptorSet gbufferNormalImageWrite(m_rayTracingDescriptorSets.at(i), 2, 0, 1, vk::DescriptorType::eCombinedImageSampler, &descriptorGBufferNormalImageInfo, nullptr, nullptr);
+
                 vk::DescriptorImageInfo randomImageInfo(nullptr, m_randomImageViews.at(i), vk::ImageLayout::eGeneral);
-                vk::WriteDescriptorSet randomImageWrite(m_rayTracingDescriptorSets.at(i), 2, 0, 1, vk::DescriptorType::eStorageImage, &randomImageInfo, nullptr, nullptr);
+                vk::WriteDescriptorSet randomImageWrite(m_rayTracingDescriptorSets.at(i), 3, 0, 1, vk::DescriptorType::eStorageImage, &randomImageInfo, nullptr, nullptr);
 
                 vk::DescriptorBufferInfo rtPerFrameInfo(m_rtPerFrameInfoBufferInfos.at(i).m_Buffer, 0, VK_WHOLE_SIZE);
-                vk::WriteDescriptorSet  rtPerFrameWrite(m_rayTracingDescriptorSets.at(i), 3, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &rtPerFrameInfo, nullptr);
+                vk::WriteDescriptorSet  rtPerFrameWrite(m_rayTracingDescriptorSets.at(i), 4, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &rtPerFrameInfo, nullptr);
 
 
-                std::array descriptorWrites = { accelerationStructureWrite, gbufferPosImageWrite, randomImageWrite, rtPerFrameWrite };
+                std::array descriptorWrites = { accelerationStructureWrite, gbufferPosImageWrite, gbufferNormalImageWrite, randomImageWrite, rtPerFrameWrite };
                 m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
             }
         }

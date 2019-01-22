@@ -5,14 +5,15 @@ layout(location = 0) rayPayloadNV uint hitValue;
 
 layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
 layout(set = 0, binding = 1) uniform sampler2D gbufferPosSampler;
-layout(set = 0, binding = 2, rgba32ui) uniform uimage2D randTex;
+layout(set = 0, binding = 2) uniform sampler2D gbufferNormalSampler;
+layout(set = 0, binding = 3, rgba32ui) uniform uimage2D randTex;
 
 struct RTperFrameInfo
 {
     int frameSampleCount;
 };
 
-layout(set = 0, binding = 3) readonly buffer rtPerFrameBuffer
+layout(set = 0, binding = 4) readonly buffer rtPerFrameBuffer
 {
     RTperFrameInfo perFrameInfo;
 };
@@ -82,8 +83,40 @@ vec3 generatePointOnDiskLight(in vec3 position, in float radius, in vec3 normal)
     return position + radius * a * x + radius * b * y;
 }
 
+vec3 sampleUniformHemisphere(float u, float v) { //u, v are random numbers
+	float sinTheta = sqrt(2.0f * u - u * u);  //sin(arccos(x)) = sqrt(1-x^2)
+	float phi = 2.0f * PI * v;
+
+	float x = sinTheta * cos(phi);
+	float y = sinTheta * sin(phi);	
+
+	// Project point up to the unit sphere
+    float z = sqrt(max(0.f, 1.f - x * x - y * y));
+    return vec3(x, y, z);
+}
+
+vec3 rotateToNormal(in vec3 dir, in vec3 normal) {
+	/*vec3 tangent = normalize(abs(normal.x) > abs(normal.y) ? vec3(normal.z, 0.f, -normal.x) : vec3(0.f, -normal.z, normal.y));
+	vec3 bitangent = cross(normal, tangent);
+	mat3 rotToNormal = mat3(tangent, bitangent, normal);
+
+	return rotToNormal * dir;*/
+	vec3 pseudo_perpendicular = (abs(normal.x) <= 0.6f) ? vec3(1, 0, 0) : vec3(0, 1, 0);
+    vec3 u = normalize(cross(normal, pseudo_perpendicular));
+    vec3 v = normalize(cross(normal, u));
+    vec3 w = normal;
+
+    return mat3(u,v,w) * dir;
+}
+
+vec3 sampleRotatedHemisphere(in vec3 normal)
+{
+    vec3 hemiPoint = sampleUniformHemisphere(rand(), rand());
+    return rotateToNormal(hemiPoint, normal);
+}
+
 const int NUM_RTAO_SAMPLES = 8;
-const float RTAO_RADIUS = 0.5f;
+const float RTAO_RADIUS = 100.0f;
 
 void main() 
 {
@@ -93,10 +126,11 @@ void main()
     randomInit(ivec2(gl_LaunchIDNV.xy));
 
     vec3 origin = texture(gbufferPosSampler, inUV).xyz;
+    vec3 normal = normalize(texture(gbufferNormalSampler, inUV).xyz);
 
     uint rayFlags = gl_RayFlagsOpaqueNV;
     uint cullMask = 0xff;
-    float tmin = 0.001;
+    float tmin = 0.01;
     float tmax = 100000.0;
     
     float InvSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
@@ -105,7 +139,7 @@ void main()
 
     for(int i = 0; i < NUM_RTAO_SAMPLES; i++)
     {
-        vec3 direction = generatePointOnSphericalLight(origin, 1.0f);
+        vec3 direction = sampleRotatedHemisphere(normal);
         tmax = RTAO_RADIUS;
         traceNV(topLevelAS, rayFlags, cullMask,
             0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
