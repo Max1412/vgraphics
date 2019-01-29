@@ -1269,7 +1269,7 @@ namespace vg
 #undef MemoryBarrier
             vk::MemoryBarrier memoryBarrier(
                 vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV,
-                vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV
+                vk::AccessFlagBits::eAccelerationStructureReadNV
             );
 #define MemoryBarrier __faststorefence
 
@@ -1281,14 +1281,14 @@ namespace vg
                 vk::AccelerationStructureInfoNV asInfoBot(vk::AccelerationStructureTypeNV::eBottomLevel, {}, 0, 1, &geometryVec.at(i));
                 OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoBot), nullptr, 0, VK_FALSE, m_bottomASs.at(i).m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
                 //cmdBuf.buildAccelerationStructureNV(asInfoBot, nullptr, 0, VK_FALSE, m_bottomAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
-                cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
+                cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, {}, memoryBarrier, nullptr, nullptr);
 
             }
 
             vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, {}, static_cast<uint32_t>(instances.size()), 0, nullptr);
             OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoTop), m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             //cmdBuf.buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
-            cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
+            cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
 
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
         }
