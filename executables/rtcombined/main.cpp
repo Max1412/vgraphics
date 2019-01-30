@@ -1601,8 +1601,8 @@ namespace vg
             const auto rgenShaderCode = Utility::readFile("combined/rtao.rgen.spv");
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 
-            const auto ahitShaderCode = Utility::readFile("combined/rtao.rahit.spv");
-            const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
+            //const auto ahitShaderCode = Utility::readFile("combined/rtao.rahit.spv");
+            //const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
             const auto chitShaderCode = Utility::readFile("combined/rtao.rchit.spv");
             const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
@@ -1614,7 +1614,7 @@ namespace vg
             std::array rtShaderStageInfos = {
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
-                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eAnyHitNV, ahitShaderModule, "main"),
+                //vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eAnyHitNV, ahitShaderModule, "main"),
 
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main")
             };
@@ -1629,9 +1629,9 @@ namespace vg
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
                 // group 1: any hit
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
-                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV},
+                //vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV},
                 // group 2: miss
-                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 3, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
             };
 
             vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
@@ -1646,7 +1646,7 @@ namespace vg
 
             // destroy shader modules:
             m_context.getDevice().destroyShaderModule(rgenShaderModule);
-            m_context.getDevice().destroyShaderModule(ahitShaderModule);
+            //m_context.getDevice().destroyShaderModule(ahitShaderModule);
             m_context.getDevice().destroyShaderModule(chitShaderModule);
             m_context.getDevice().destroyShaderModule(missShaderModule);
 
@@ -1953,7 +1953,7 @@ namespace vg
 
                 OwnCmdTraceRays(m_rtAOSecondaryCommandBuffers.at(i),
                     m_rtAOSBTInfo.m_Buffer, 0, // raygen
-                    m_rtAOSBTInfo.m_Buffer, 3 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+                    m_rtAOSBTInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
                     m_rtAOSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // (any) hit
                     nullptr, 0, 0, // callable
                     m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
@@ -2045,7 +2045,7 @@ namespace vg
                 vk::DependencyFlagBits::eByRegion, nullptr, rtPerFrameToTranser, nullptr
             );
 
-            if (m_camera.hasChanged() || !m_accumulateShadowSamples)
+            if (m_camera.hasChanged() || !m_accumulateRTSamples)
             {
                 for (auto& n : m_sampleCounts)
                     n = 0;
@@ -2053,6 +2053,9 @@ namespace vg
             }
             
             m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, 0, sizeof(int32_t), &m_sampleCounts.at(currentImage));
+            m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(int32_t), sizeof(float), &m_RTAORadius);
+            m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(int32_t) + sizeof(float), sizeof(int32_t), &m_numAOSamples);
+
             m_sampleCounts.at(currentImage)++;
 
             vk::BufferMemoryBarrier rtPerFrameToRead(
@@ -2128,7 +2131,9 @@ namespace vg
                 m_lightManager.lightGUI(m_lightBufferInfos.at(0), m_lightBufferInfos.at(1), m_lightBufferInfos.at(2), true);
                 if (ImGui::BeginMenu("Ray Tracing"))
                 {
-                    ImGui::Checkbox("Accumulate Shadow Samples", &m_accumulateShadowSamples);
+                    ImGui::Checkbox("Accumulate Samples", &m_accumulateRTSamples);
+                    ImGui::SliderFloat("RTAO Radius", &m_RTAORadius, 0.1f, 100.0f);
+                    ImGui::SliderInt("RTAO Samples", &m_numAOSamples, 1, 64);
                     ImGui::EndMenu();
                 }
                 if(m_imguiShowDemoWindow) ImGui::ShowDemoWindow();
@@ -2280,6 +2285,8 @@ namespace vg
 
         std::vector<int32_t> m_sampleCounts;
         std::vector<BufferInfo> m_rtPerFrameInfoBufferInfos;
+        int32_t m_numAOSamples = 4;
+        float m_RTAORadius = 100.0f;
 
         // soft shadow stuff
         vk::DescriptorSetLayout m_rtSoftShadowsDescriptorSetLayout;
@@ -2289,7 +2296,7 @@ namespace vg
         BufferInfo m_rtSoftShadowSBTInfo;
         std::vector<vk::CommandBuffer> m_rtSoftShadowsSecondaryCommandBuffers;
         
-        bool m_accumulateShadowSamples = true;
+        bool m_accumulateRTSamples = true;
 
         std::vector<ImageInfo> m_rtSoftShadowPointImageInfos;
         std::vector<vk::ImageView> m_rtSoftShadowPointImageViews;

@@ -28,6 +28,17 @@ vec3 generatePointOnDiskLight(in vec3 position, in float radius, in vec3 normal)
     return position + radius * a * x + radius * b * y;
 }
 
+vec3 sampleCosineHemisphere(float u, float v) { //u, v are random numbers
+	float sinTheta = sqrt(u);
+	float phi = 2.0f * PI * v;
+
+	float x = sinTheta * cos(phi);
+	float y = sinTheta * sin(phi);	
+
+	// Project point up to the unit sphere
+    float z = sqrt(max(0.f, 1.f - x * x - y * y));
+    return vec3(x, y, z);
+}
 
 vec3 sampleUniformHemisphere(float u, float v) { //u, v are random numbers
 	float sinTheta = sqrt(2.0f * u - u * u);  //sin(arccos(x)) = sqrt(1-x^2)
@@ -58,5 +69,11 @@ vec3 rotateToNormal(in vec3 dir, in vec3 normal) {
 vec3 sampleRotatedHemisphere(in vec3 normal)
 {
     vec3 hemiPoint = sampleUniformHemisphere(rand(), rand());
+    return rotateToNormal(hemiPoint, normal);
+}
+
+vec3 sampleRotatedCosineHemisphere(in vec3 normal)
+{
+    vec3 hemiPoint = sampleCosineHemisphere(rand(), rand());
     return rotateToNormal(hemiPoint, normal);
 }

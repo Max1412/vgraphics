@@ -1,17 +1,14 @@
 #version 460
 #extension GL_NV_ray_tracing : require
 
-layout(location = 0) rayPayloadNV uint hitValue;
+layout(location = 0) rayPayloadNV float hitValue;
 
 layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
 layout(set = 0, binding = 1) uniform sampler2D gbufferPosSampler;
 layout(set = 0, binding = 2) uniform sampler2D gbufferNormalSampler;
 layout(set = 0, binding = 3, rgba32ui) uniform uimage2D randTex;
 
-struct RTperFrameInfo
-{
-    int frameSampleCount;
-};
+#include "structs.glsl"
 
 layout(set = 0, binding = 4) readonly buffer rtPerFrameBuffer
 {
@@ -25,9 +22,6 @@ layout(set = 1, binding = 0, r32f) uniform image2D rtaoImage;
 #include "random.glsl"
 #include "samplePointGen.glsl"
 
-const int NUM_RTAO_SAMPLES = 8;
-const float RTAO_RADIUS = 100.0f;
-
 void main() 
 {
     const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
@@ -40,25 +34,28 @@ void main()
 
     uint rayFlags = gl_RayFlagsOpaqueNV;
     uint cullMask = 0xff;
-    float tmin = 0.01;
+    float tmin = 0.1;
     float tmax = 100000.0;
     
     float InvSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
 
     float rtAOValue = 0.0f;
 
-    for(int i = 0; i < NUM_RTAO_SAMPLES; i++)
+    for(int i = 0; i < perFrameInfo.RTAOSampleCount; i++)
     {
-        vec3 direction = sampleRotatedHemisphere(normal);
-        tmax = RTAO_RADIUS;
+        vec3 direction = sampleRotatedCosineHemisphere(normal);
+        tmax = perFrameInfo.RTAORadius;
         traceNV(topLevelAS, rayFlags, cullMask,
             0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
             origin, tmin, direction, tmax,
             0 /*payload*/ // X here is location = X of the payload
         );
-        rtAOValue += hitValue;
+        if(hitValue > 0)
+            rtAOValue += pow(hitValue / perFrameInfo.RTAORadius, 2);
+        else
+            rtAOValue += 1;
     }
-    rtAOValue /= float(NUM_RTAO_SAMPLES);
+    rtAOValue /= float(perFrameInfo.RTAOSampleCount);
 
 
     float oldValue = imageLoad(rtaoImage, ivec2(gl_LaunchIDNV.xy)).x;

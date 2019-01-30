@@ -196,4 +196,6 @@ void main()
     mapped = pow(mapped, vec3(1.0 / gamma));
   
     outColor = vec4(mapped, 1.0f);
+
+    outColor = vec4(AO, AO, AO, 1.0f);
 }

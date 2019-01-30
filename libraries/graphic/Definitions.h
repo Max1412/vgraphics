@@ -23,6 +23,8 @@ namespace vg
     struct RTperFrameInfo
     {
         int32_t frameSampleCount = 0;
+        float RTAORadius = 100.0f;
+        int32_t RTAOSampleCount = 4;
     };
 
     struct ImageLoadInfo
