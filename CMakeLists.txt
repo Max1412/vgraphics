@@ -16,7 +16,6 @@ set(G2_RESOURCES_PATH			${PROJECT_SOURCE_DIR}/resources)
 set(G2_SHADERS_PATH				${PROJECT_SOURCE_DIR}/shaders)
 
 
-#find_package(GLEW REQUIRED)
 find_package(assimp REQUIRED)
 find_package(glm 0.9.8 REQUIRED)
 find_package(glfw3 3.2.1 REQUIRED)
@@ -24,7 +23,6 @@ find_package(Vulkan REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
 
-#list(APPEND G2_INCLUDE_DIRECTORIES ${GLEW_INCLUDE_PATH})
 
 add_definitions(
     -DGLFW_INCLUDE_NONE
@@ -33,21 +31,20 @@ add_definitions(
 	-D_SILENCE_PARALLEL_ALGORITHMS_EXPERIMENTAL_WARNING
     -DGLM_FORCE_RADIANS -DGLM_ENABLE_EXPERIMENTAL
     -DNOMINMAX
-    -DSOURCE_DIRECTORY="${CMAKE_SOURCE_DIR}/"
 )
 
+
 if(MSVC)
-    add_compile_options(/std:c++latest /MP /openmp /permissive- /Zc:twoPhase- /wd4251)
+    add_compile_options(/MP /openmp /permissive- /Zc:twoPhase- /wd4251)
     set(G2_LINKER_FLAGS "/NODEFAULTLIB:libcmt /ignore:4098,4099,4221 /MANIFEST:NO")
-    file(COPY "${ASSIMP_ROOT_DIR}/bin${ASSIMP_ARCHITECTURE}/assimp-vc140-mt.dll" DESTINATION "${G2_BINARIES_FOLDER}/Debug")
-    file(COPY "${ASSIMP_ROOT_DIR}/bin${ASSIMP_ARCHITECTURE}/assimp-vc140-mt.dll" DESTINATION "${G2_BINARIES_FOLDER}/Release")
 else()
 endif()
 
 
 ##### internal libraries
 list(APPEND G2_INCLUDE_DIRECTORIES "${G2_LIBRARIES_FOLDER}")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY  "${G2_BINARIES_FOLDER}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG  "${G2_BINARIES_FOLDER}/Debug")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE  "${G2_BINARIES_FOLDER}/Release")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY  "${G2_BINARIES_FOLDER}")
 file(GLOB children RELATIVE ${G2_LIBRARIES_FOLDER} ${G2_LIBRARIES_FOLDER}/*)
 foreach(subdir ${children})
@@ -73,8 +70,11 @@ include_directories(${G2_INCLUDE_DIRECTORIES})
 
 ##### external libraries residing inside the project
 list(APPEND G2_INCLUDE_DIRECTORIES ${G2_EXTERNAL_FOLDER})
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY  "${G2_BINARIES_FOLDER}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG  "${G2_BINARIES_FOLDER}/Debug")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE  "${G2_BINARIES_FOLDER}/Release")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO "${G2_BINARIES_FOLDER}/RelWithDebInfo")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY  "${G2_BINARIES_FOLDER}")
+
 file(GLOB children RELATIVE ${G2_EXTERNAL_FOLDER} ${G2_EXTERNAL_FOLDER}/*)
 foreach(subdir ${children})
     if(IS_DIRECTORY ${G2_EXTERNAL_FOLDER}/${subdir})
@@ -116,7 +116,9 @@ foreach(subdir ${children})
         #file(COPY ${G2_DLLS} DESTINATION "${G2_BINARIES_FOLDER}")
         set_target_properties(${subdir} PROPERTIES
 										LINKER_LANGUAGE CXX
-										RUNTIME_OUTPUT_DIRECTORY "${G2_BINARIES_FOLDER}"
+										RUNTIME_OUTPUT_DIRECTORY_DEBUG "${G2_BINARIES_FOLDER}/Debug"
+                                        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${G2_BINARIES_FOLDER}/Release"
+                                        RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${G2_BINARIES_FOLDER}/RelWithDebInfo"
 										CXX_STANDARD 17
 										CXX_STANDARD_REQUIRED ON)
         target_include_directories(${subdir} PUBLIC ${G2_INCLUDE_DIRECTORIES})
