@@ -1,0 +1,53 @@
+#version 460
+#extension GL_NV_ray_tracing : require
+
+layout(location = 0) rayPayloadNV vec3 hitValue;
+
+layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
+layout(set = 0, binding = 1) uniform sampler2D gbufferPosSampler;
+layout(set = 0, binding = 2) uniform sampler2D gbufferNormalSampler;
+layout(set = 0, binding = 3) uniform isampler2D gbufferMeshIDSampler;
+
+layout(set = 0, binding = 4, rgba32ui) uniform uimage2D randTex;
+
+#include "structs.glsl"
+
+
+struct MaterialInfo
+{
+    vec3 diffColor;
+    vec3 specColor;
+    float N;
+};
+
+// layout(set = 0, binding = X) readonly buffer materialBuffer
+// {
+//     MaterialInfo materials[];
+// };
+
+struct PerMeshInfo
+{
+    // standard
+    uint    indexCount;
+    uint    instanceCount;
+    uint    firstIndex;
+    int     vertexOffset;
+    uint    firstInstance;
+    // additional
+    int texIndex;
+    int texSpecIndex;
+    int assimpMaterialIndex;
+};
+
+// layout(std430, set = 0, binding = Y) readonly buffer indirectDrawBuffer
+// {
+//     PerMeshInfo perMesh[];
+// } perMeshInfos;
+
+
+layout(set = 0, binding = 5, rgba32f) uniform image2D reflectionImage;
+
+void main()
+{
+    //TODO get mesh ID (from gbuffer) to get material ID
+}

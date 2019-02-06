@@ -197,5 +197,5 @@ void main()
   
     outColor = vec4(mapped, 1.0f);
 
-    outColor = vec4(AO, AO, AO, 1.0f);
+    //outColor = vec4(AO, AO, AO, 1.0f);
 }

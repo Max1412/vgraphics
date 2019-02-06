@@ -49,8 +49,6 @@ namespace vg
 
     void BaseApp::copyBuffer(const vk::Buffer src, const vk::Buffer dst, const vk::DeviceSize size) const
     {
-        vk::CommandBufferAllocateInfo allocInfo(m_transferCommandPool, vk::CommandBufferLevel::ePrimary, 1);
-
         auto commandBuffer = beginSingleTimeCommands(m_transferCommandPool);
 
         vk::BufferCopy copyRegion(0, 0, size);
