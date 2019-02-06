@@ -23,15 +23,18 @@ namespace vg
     {
         BufferInfo bufferInfo;
 
-        vk::BufferCreateInfo bufferCreateInfo({}, size, usage, sharingMode);
+		vk::BufferCreateInfo bufferCreateInfo({}, size, usage, sharingMode);
+
+		// only needed if concurrent, but allocated here so it won't get destructed at the end of the if scope
+        vg::QueueFamilyIndices indices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
+		std::array<uint32_t, 2> queueFamilyIndices = { indices.graphicsFamily.value(), indices.transferFamily.value() };
+
         if (sharingMode == vk::SharingMode::eConcurrent)
         {
-            vg::QueueFamilyIndices indices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
-            uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.transferFamily.value() };
-
             bufferCreateInfo.queueFamilyIndexCount = 2;
-            bufferCreateInfo.pQueueFamilyIndices = queueFamilyIndices;
+            bufferCreateInfo.setPQueueFamilyIndices(queueFamilyIndices.data());
         }
+
         VmaAllocationCreateInfo allocInfo = {};
         allocInfo.usage = properties;
         allocInfo.flags = flags;
