@@ -55,6 +55,7 @@ layout(set = 2, binding = 0) uniform sampler2DArray shadowDirectionalImage;
 layout(set = 2, binding = 1) uniform sampler2DArray shadowPointImage;
 layout(set = 2, binding = 2) uniform sampler2DArray shadowSpotImage;
 layout(set = 2, binding = 3) uniform sampler2D rtaoImage;
+layout(set = 2, binding = 4) uniform sampler2D reflectionImage;
 
 void main() 
 {
@@ -181,6 +182,9 @@ void main()
         lightingColor += spotShadow * (diffCol * result.diffuse + specCol * result.specular);
     }
 
+    vec3 reflectionColor = texture(reflectionImage, inUV).xyz;
+    lightingColor += reflectionColor;
+
     lightingColor *= AO;
 
     ////////////// TONEMAPPING
@@ -197,5 +201,5 @@ void main()
   
     outColor = vec4(mapped, 1.0f);
 
-    //outColor = vec4(AO, AO, AO, 1.0f);
+    outColor = vec4(reflectionColor, 1.0f);
 }

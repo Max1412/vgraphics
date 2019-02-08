@@ -7,14 +7,11 @@ layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
 layout(set = 0, binding = 1) uniform sampler2D gbufferPosSampler;
 layout(set = 0, binding = 2, rgba32ui) uniform uimage2D randTex;
 
-struct RTperFrameInfo
-{
-    int frameSampleCount;
-};
+#include "structs.glsl"
 
 layout(set = 0, binding = 3) readonly buffer rtPerFrameBuffer
 {
-    RTperFrameInfo perFrameInfo;
+    RTperFrameInfo2 perFrameInfo;
 };
 
 layout(set = 2, binding = 0, r32f) uniform image2DArray softShadowDirectionalImage;

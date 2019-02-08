@@ -38,12 +38,10 @@ namespace vg
         RTCombinedApp() :
     		BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
     		m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
-			m_scene("salle_de_bain/salle_de_bain.obj") 
+			m_scene("Sponza/sponza.obj")
 		{
-            //createRenderPass();
-
             createCommandPools();
-			createSceneInformation("salle_de_bain/");
+			createSceneInformation("Sponza/");
 
             createDepthResources();
 
@@ -267,16 +265,6 @@ namespace vg
 
             vk::AttachmentReference uvAttachmentRef(2, vk::ImageLayout::eColorAttachmentOptimal);
 
-			vk::AttachmentDescription meshIDAttachment({}, vk::Format::eR32Sint, //TODO use saved format, not hard-coded
-				vk::SampleCountFlagBits::e1,
-				vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,            // load store op
-				vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,      // stencil op
-				vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal //TODO is this the right layout? maybe colorattachmentoptimal
-			);
-
-			vk::AttachmentReference meshIDAttachmentRef(3, vk::ImageLayout::eColorAttachmentOptimal);
-
-
             vk::AttachmentDescription depthAttachment({}, vk::Format::eD32SfloatS8Uint,
                 vk::SampleCountFlagBits::e1,
                 vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
@@ -284,13 +272,13 @@ namespace vg
                 vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal
             );
 
-            vk::AttachmentReference depthAttachmentRef(4, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+            vk::AttachmentReference depthAttachmentRef(3, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 
             vk::SubpassDependency dependency(VK_SUBPASS_EXTERNAL, 0,
                 vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
                 {}, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::DependencyFlagBits::eByRegion);
 
-            std::array colorAttachmentRefs = { positionAttachmentRef, normalAttachmentRef, uvAttachmentRef, meshIDAttachmentRef };
+            std::array colorAttachmentRefs = { positionAttachmentRef, normalAttachmentRef, uvAttachmentRef };
 
             vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics,
                 0, nullptr,                 // input attachments (standard values)
@@ -299,7 +287,7 @@ namespace vg
                 &depthAttachmentRef);       // depth stencil attachment
                                             // other attachment at standard values: Preserved
 
-            std::array attachments = { positionAttachment, normalAttachment, uvAttachment, meshIDAttachment, depthAttachment };
+            std::array attachments = { positionAttachment, normalAttachment, uvAttachment, depthAttachment };
 
             vk::RenderPassCreateInfo renderpassInfo({}, static_cast<uint32_t>(attachments.size()), attachments.data(), 1, &subpass, 1, &dependency);
 
@@ -412,7 +400,7 @@ namespace vg
             //vk::PipelineColorBlendAttachmentState uvBlendAttachment(false); // if blending is ON, this is needed
             //uvBlendAttachment.setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG);
             // we need 2 blend attachments for 2 framebuffer attachments
-            std::array blendAttachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
+            std::array blendAttachments = { colorBlendAttachment, colorBlendAttachment, colorBlendAttachment };
             // standard values for now
             vk::PipelineColorBlendStateCreateInfo colorBlending({}, false, vk::LogicOp::eCopy,
                 static_cast<uint32_t>(blendAttachments.size()), blendAttachments.data(),
@@ -474,14 +462,6 @@ namespace vg
                         VMA_MEMORY_USAGE_GPU_ONLY)
                 );
 
-				m_gbufferMeshIDImageInfos.push_back(
-					createImage(ext.width, ext.height, 1,
-						vk::Format::eR32Sint,
-						vk::ImageTiling::eOptimal,
-						vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
-						VMA_MEMORY_USAGE_GPU_ONLY)
-				);
-
                 // view //TODO maybe only one view is needed because they're all the same?
                 const vk::ImageViewCreateInfo posViewInfo({},
                     m_gbufferPositionImageInfos.at(i).m_Image,
@@ -507,14 +487,6 @@ namespace vg
                     { vk::ImageAspectFlagBits::eColor, 0, m_gbufferUVImageInfos.at(i).mipLevels, 0, 1 });
                 m_gbufferUVImageViews.push_back(m_context.getDevice().createImageView(uvViewInfo));
 
-				const vk::ImageViewCreateInfo meshIDViewInfo({},
-					m_gbufferMeshIDImageInfos.at(i).m_Image,
-					vk::ImageViewType::e2D,
-					vk::Format::eR32Sint,
-					{},
-					{ vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS });
-				m_gbufferMeshIDImageViews.push_back(m_context.getDevice().createImageView(meshIDViewInfo));
-
                 // sampler
                 vk::SamplerCreateInfo samplerPosInfo({},
                     vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
@@ -539,14 +511,6 @@ namespace vg
                     static_cast<float>(m_gbufferUVImageInfos.at(i).mipLevels),
                     vk::BorderColor::eIntOpaqueBlack, false);
                 m_gbufferUVSamplers.push_back(m_context.getDevice().createSampler(samplerUVInfo));
-
-				vk::SamplerCreateInfo samplerMeshIDInfo({},
-					vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest,
-					vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
-					0.0f, true, 1.0f, false, vk::CompareOp::eAlways, 0.0f,
-					static_cast<float>(m_gbufferMeshIDImageInfos.at(i).mipLevels),
-					vk::BorderColor::eIntOpaqueBlack, false);
-				m_gbufferMeshIDSamplers.push_back(m_context.getDevice().createSampler(samplerMeshIDInfo));
             }
 
             // create depth images //TODO maybe those aren't even needed
@@ -571,7 +535,6 @@ namespace vg
                     m_gbufferPositionImageViews.at(i),
                     m_gbufferNormalImageViews.at(i),
                     m_gbufferUVImageViews.at(i),
-					m_gbufferMeshIDImageViews.at(i),
                     m_gbufferDepthImageViews.at(i) }; //TODO what depth image to use?
 
                 vk::FramebufferCreateInfo framebufferInfo({}, m_gbufferRenderpass,
@@ -1302,7 +1265,7 @@ namespace vg
             vmaDestroyBuffer(m_context.getAllocator(), stagingBuffer.m_Buffer, stagingBuffer.m_BufferAllocation);
 
             m_sampleCounts = std::vector<int32_t>(m_swapChainFramebuffers.size(), 0);
-            std::vector<RTperFrameInfo> initdata(1);
+            std::vector<RTperFrameInfoCombined> initdata(1);
             for(int i = 0; i < m_swapChainFramebuffers.size(); i++)
                 m_rtPerFrameInfoBufferInfos.push_back(fillBufferTroughStagedTransfer(initdata, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst));
         }
@@ -1781,20 +1744,23 @@ namespace vg
 			// GBuffer
 			vk::DescriptorSetLayoutBinding gbufferPos(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
 			vk::DescriptorSetLayoutBinding gbufferNormal(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-			vk::DescriptorSetLayoutBinding gbufferMeshID(3, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
 			// add. info
-        	vk::DescriptorSetLayoutBinding randomImageLB(4, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-			vk::DescriptorSetLayoutBinding rtPerFrame(5, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+        	vk::DescriptorSetLayoutBinding randomImageLB(3, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+			vk::DescriptorSetLayoutBinding rtPerFrame(4, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
 			//output image
-			vk::DescriptorSetLayoutBinding reflectionImageLB(6, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+			vk::DescriptorSetLayoutBinding reflectionImageLB(5, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
         	// info for shading
-			vk::DescriptorSetLayoutBinding vertexBufferLB(7, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
-			vk::DescriptorSetLayoutBinding indexBufferLB(8, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
-			vk::DescriptorSetLayoutBinding offsetBufferLB(9, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
-			vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(10, vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImages.size()), vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+			vk::DescriptorSetLayoutBinding vertexBufferLB(6, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+			vk::DescriptorSetLayoutBinding indexBufferLB(7, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+			vk::DescriptorSetLayoutBinding offsetBufferLB(8, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+			
+			vk::DescriptorSetLayoutBinding materialBufferLB(9, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+			vk::DescriptorSetLayoutBinding indirectDrawBufferLB(10, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 
-			std::array bindings = { asLB, gbufferPos, gbufferNormal,gbufferMeshID, randomImageLB, rtPerFrame,reflectionImageLB,
-			vertexBufferLB,indexBufferLB, offsetBufferLB, allTexturesLayoutBinding };
+        	vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(11, vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImages.size()), vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+
+			std::array bindings = { asLB, gbufferPos, gbufferNormal, randomImageLB, rtPerFrame,reflectionImageLB,
+			vertexBufferLB,indexBufferLB, offsetBufferLB, materialBufferLB, indirectDrawBufferLB, allTexturesLayoutBinding };
 
 			vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
@@ -1891,32 +1857,37 @@ namespace vg
 				vk::DescriptorImageInfo descriptorGBufferNormalImageInfo(m_gbufferNormalSamplers.at(i), m_gbufferNormalImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
 				vk::WriteDescriptorSet gbufferNormalImageWrite(m_rtReflectionsDescriptorSets.at(i), 2, 0, 1, vk::DescriptorType::eCombinedImageSampler, &descriptorGBufferNormalImageInfo, nullptr, nullptr);
 
-				vk::DescriptorImageInfo descriptorGBufferMeshIDImageInfo(m_gbufferMeshIDSamplers.at(i), m_gbufferMeshIDImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
-				vk::WriteDescriptorSet gbufferMeshIDImageWrite(m_rtReflectionsDescriptorSets.at(i), 3, 0, 1, vk::DescriptorType::eCombinedImageSampler, &descriptorGBufferMeshIDImageInfo, nullptr, nullptr);
-
 				
 				vk::DescriptorImageInfo randomImageInfo(nullptr, m_randomImageViews.at(i), vk::ImageLayout::eGeneral);
-				vk::WriteDescriptorSet randomImageWrite(m_rtReflectionsDescriptorSets.at(i), 4, 0, 1, vk::DescriptorType::eStorageImage, &randomImageInfo, nullptr, nullptr);
+				vk::WriteDescriptorSet randomImageWrite(m_rtReflectionsDescriptorSets.at(i), 3, 0, 1, vk::DescriptorType::eStorageImage, &randomImageInfo, nullptr, nullptr);
 
 				vk::DescriptorBufferInfo rtPerFrameInfo(m_rtPerFrameInfoBufferInfos.at(i).m_Buffer, 0, VK_WHOLE_SIZE);
-				vk::WriteDescriptorSet  rtPerFrameWrite(m_rtReflectionsDescriptorSets.at(i), 5, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &rtPerFrameInfo, nullptr);
+				vk::WriteDescriptorSet  rtPerFrameWrite(m_rtReflectionsDescriptorSets.at(i), 4, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &rtPerFrameInfo, nullptr);
 				
 				vk::DescriptorImageInfo reflectionImageInfo(nullptr, m_rtReflectionImageViews.at(i), vk::ImageLayout::eGeneral);
-				vk::WriteDescriptorSet reflectionImageWrite(m_rtReflectionsDescriptorSets.at(i), 6, 0, 1, vk::DescriptorType::eStorageImage, &reflectionImageInfo, nullptr, nullptr);
+				vk::WriteDescriptorSet reflectionImageWrite(m_rtReflectionsDescriptorSets.at(i), 5, 0, 1, vk::DescriptorType::eStorageImage, &reflectionImageInfo, nullptr, nullptr);
 
 
 				vk::DescriptorBufferInfo vbInfo(m_vertexBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
-				vk::WriteDescriptorSet descWriteVertexBuffer(m_rtReflectionsDescriptorSets.at(i), 7, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &vbInfo, nullptr);
+				vk::WriteDescriptorSet descWriteVertexBuffer(m_rtReflectionsDescriptorSets.at(i), 6, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &vbInfo, nullptr);
 				vk::DescriptorBufferInfo ibInfo(m_indexBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
-				vk::WriteDescriptorSet descWriteIndexBuffer(m_rtReflectionsDescriptorSets.at(i), 8, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &ibInfo, nullptr);
+				vk::WriteDescriptorSet descWriteIndexBuffer(m_rtReflectionsDescriptorSets.at(i), 7, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &ibInfo, nullptr);
 				vk::DescriptorBufferInfo obInfo(m_offsetBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
-				vk::WriteDescriptorSet descWriteOffsetBuffer(m_rtReflectionsDescriptorSets.at(i), 9, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &obInfo, nullptr);
+				vk::WriteDescriptorSet descWriteOffsetBuffer(m_rtReflectionsDescriptorSets.at(i), 8, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &obInfo, nullptr);
 				
-				vk::WriteDescriptorSet descWriteAllImages(m_rtReflectionsDescriptorSets.at(i), 10, 0, static_cast<uint32_t>(m_allImages.size()), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
+				vk::DescriptorBufferInfo matBufferInfo(m_materialBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
+				vk::WriteDescriptorSet descWriteMaterialBuffer(m_rtReflectionsDescriptorSets.at(i), 9, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &matBufferInfo, nullptr);
+
+				vk::DescriptorBufferInfo indirectBufferInfo(m_indirectDrawBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
+				vk::WriteDescriptorSet descWriteIndirectBuffer(m_rtReflectionsDescriptorSets.at(i), 10, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &indirectBufferInfo, nullptr);
 
 
-				std::array descriptorWrites = { accelerationStructureWrite,gbufferPosImageWrite, gbufferNormalImageWrite, randomImageWrite, gbufferMeshIDImageWrite,
-					rtPerFrameWrite , reflectionImageWrite, descWriteVertexBuffer, descWriteIndexBuffer, descWriteOffsetBuffer, descWriteAllImages };
+				vk::WriteDescriptorSet descWriteAllImages(m_rtReflectionsDescriptorSets.at(i), 11, 0, static_cast<uint32_t>(m_allImages.size()), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
+
+
+				std::array descriptorWrites = { accelerationStructureWrite,gbufferPosImageWrite, gbufferNormalImageWrite, randomImageWrite,
+					rtPerFrameWrite , reflectionImageWrite, descWriteVertexBuffer, descWriteIndexBuffer, descWriteOffsetBuffer,
+					descWriteMaterialBuffer, descWriteIndirectBuffer, descWriteAllImages };
 				m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
 			}
         }
@@ -2093,10 +2064,8 @@ namespace vg
                 vk::ImageMemoryBarrier barrierGBuvTORT = barrierGBposTORT;
                 barrierGBuvTORT.setImage(m_gbufferUVImageInfos.at(i).m_Image);
 
-				vk::ImageMemoryBarrier barrierGBMeshIDTORT = barrierGBposTORT;
-				barrierGBMeshIDTORT.setImage(m_gbufferMeshIDImageInfos.at(i).m_Image);
 
-                std::array gBufferBarriers = { barrierGBposTORT, barrierGBnormalTORT, barrierGBuvTORT, barrierGBMeshIDTORT };
+                std::array gBufferBarriers = { barrierGBposTORT, barrierGBnormalTORT, barrierGBuvTORT };
 
                 m_rtSoftShadowsSecondaryCommandBuffers.at(i).pipelineBarrier(
                     vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eRayTracingShaderNV,
@@ -2289,8 +2258,7 @@ namespace vg
             // 1st renderpass: render into g-buffer
             vk::ClearValue clearPosID(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, -1.0f });
             vk::ClearValue clearValue(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
-			vk::ClearValue clearValueMeshID(std::array<int32_t, 4>{-1, -1, -1, -1});
-            std::array<vk::ClearValue, 5> clearColors = { clearPosID, clearValue, clearValue, clearValueMeshID, vk::ClearDepthStencilValue{1.0f, 0} };
+            std::array<vk::ClearValue, 5> clearColors = { clearPosID, clearValue, clearValue, vk::ClearDepthStencilValue{1.0f, 0} };
             vk::RenderPassBeginInfo renderpassInfo(m_gbufferRenderpass, m_gbufferFramebuffers.at(currentImage), { {0, 0}, m_context.getSwapChainExtent() }, static_cast<uint32_t>(clearColors.size()), clearColors.data());
             m_commandBuffers.at(currentImage).beginRenderPass(renderpassInfo, vk::SubpassContents::eSecondaryCommandBuffers);
 
@@ -2321,10 +2289,12 @@ namespace vg
                     n = 0;
                 m_camera.resetChangeFlag();
             }
-            
-            m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, 0, sizeof(int32_t), &m_sampleCounts.at(currentImage));
-            m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(int32_t), sizeof(float), &m_RTAORadius);
-            m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(int32_t) + sizeof(float), sizeof(int32_t), &m_numAOSamples);
+
+			glm::vec3 camPos = m_camera.getPosition();
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, 0, vk::ArrayProxy<const glm::vec3>{ camPos });
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3), vk::ArrayProxy<const int32_t>{ m_sampleCounts.at(currentImage) });
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3) + sizeof(int32_t), vk::ArrayProxy<const float>{ m_RTAORadius });
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3) + sizeof(int32_t) + sizeof(float), vk::ArrayProxy<const int32_t>{ m_numAOSamples });
 
             m_sampleCounts.at(currentImage)++;
 
@@ -2398,6 +2368,11 @@ namespace vg
                         createRTAOPipeline();
                         createAllCommandBuffers();
                     }
+					if (ImGui::Button("Reload: reflections (rt)"))
+					{
+						createRTReflectionPipeline();
+						createAllCommandBuffers();
+					}
                     ImGui::EndMenu();
                 }
                 m_lightManager.lightGUI(m_lightBufferInfos.at(0), m_lightBufferInfos.at(1), m_lightBufferInfos.at(2), true);
@@ -2434,7 +2409,7 @@ namespace vg
             const vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
 
             // record cmd buffer
-            m_imguiCommandBuffers.at(imageIndex).reset({});
+            m_imguiCommandBuffers.at(imageIndex).reset({}); 
             m_imguiCommandBuffers.at(imageIndex).begin(beginInfo);
             m_imguiCommandBuffers.at(imageIndex).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
             ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(imageIndex));
@@ -2495,19 +2470,16 @@ namespace vg
         std::vector<ImageInfo> m_gbufferPositionImageInfos;
         std::vector<ImageInfo> m_gbufferNormalImageInfos;
         std::vector<ImageInfo> m_gbufferUVImageInfos;
-		std::vector<ImageInfo> m_gbufferMeshIDImageInfos;
 
 
         std::vector<vk::ImageView> m_gbufferPositionImageViews;
         std::vector<vk::ImageView> m_gbufferNormalImageViews;
         std::vector<vk::ImageView> m_gbufferUVImageViews;
-		std::vector<vk::ImageView> m_gbufferMeshIDImageViews;
 
 
         std::vector<vk::Sampler> m_gbufferPositionSamplers;
         std::vector<vk::Sampler> m_gbufferNormalSamplers;
         std::vector<vk::Sampler> m_gbufferUVSamplers;
-		std::vector<vk::Sampler> m_gbufferMeshIDSamplers;
 
 
         std::vector<ImageInfo> m_gbufferDepthImages;
@@ -2553,7 +2525,7 @@ namespace vg
         std::vector<ASInfo> m_bottomASs;
         BufferInfo m_instanceBufferInfo;
         BufferInfo m_scratchBuffer;
-        //BufferInfo m_offsetBufferInfo;
+        BufferInfo m_offsetBufferInfo;
 
         std::vector<ImageInfo> m_randomImageInfos;
         std::vector<vk::ImageView> m_randomImageViews;
@@ -2610,7 +2582,6 @@ namespace vg
 		std::vector<ImageInfo> m_rtReflectionImageInfos;
 		std::vector<vk::ImageView> m_rtReflectionImageViews;
 		std::vector<vk::Sampler> m_rtReflectionImageSamplers;
-		BufferInfo m_offsetBufferInfo;
 
 		vk::DescriptorSetLayout m_rtReflectionsDescriptorSetLayout;
 		vk::PipelineLayout m_rtReflectionsPipelineLayout;

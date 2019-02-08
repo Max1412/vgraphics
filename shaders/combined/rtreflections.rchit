@@ -5,7 +5,7 @@ layout(location = 0) rayPayloadInNV vec3 hitValue;
 hitAttributeNV vec2 attribs;
 
 layout(constant_id = 0) const int NUM_TEXTURES = 64;
-layout(set = 0, binding = 10) uniform sampler2D allTextures[NUM_TEXTURES];
+layout(set = 0, binding = 11) uniform sampler2D allTextures[NUM_TEXTURES];
 
 struct VertexInfo
 {
@@ -14,12 +14,12 @@ struct VertexInfo
     vec3 normal;
 };
 
-layout(std430, set = 0, binding = 7) readonly buffer vertexBuffer
+layout(std430, set = 0, binding = 6) readonly buffer vertexBuffer
 {
     VertexInfo vertices[];
 } vertexInfos;
 
-layout(std430, set = 0, binding = 8) readonly buffer indexBuffer
+layout(std430, set = 0, binding = 7) readonly buffer indexBuffer
 {
     uint indices[];
 } indexInfos;
@@ -33,7 +33,7 @@ struct OffsetInfo
     int m_specTextureID;
 };
 
-layout(std430, set = 0, binding = 9) readonly buffer offsetBuffer
+layout(std430, set = 0, binding = 8) readonly buffer offsetBuffer
 {
     OffsetInfo offsets[];
 } offsetInfos;

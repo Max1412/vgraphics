@@ -6,12 +6,17 @@ layout(location = 0) rayPayloadNV vec3 hitValue;
 layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
 layout(set = 0, binding = 1) uniform sampler2D gbufferPosSampler;
 layout(set = 0, binding = 2) uniform sampler2D gbufferNormalSampler;
-layout(set = 0, binding = 3) uniform isampler2D gbufferMeshIDSampler;
 
-layout(set = 0, binding = 4, rgba32ui) uniform uimage2D randTex;
+layout(set = 0, binding = 3, rgba32ui) uniform uimage2D randTex;
 
+#include "random.glsl"
 #include "structs.glsl"
+const float PI = 3.1415926535;
 
+layout(set = 0, binding = 4, std430) readonly buffer rtPerFrameBuffer
+{
+    RTperFrameInfo2 perFrameInfo;
+};
 
 struct MaterialInfo
 {
@@ -20,10 +25,10 @@ struct MaterialInfo
     float N;
 };
 
-// layout(set = 0, binding = X) readonly buffer materialBuffer
-// {
-//     MaterialInfo materials[];
-// };
+layout(set = 0, binding = 9) readonly buffer materialBuffer
+{
+    MaterialInfo materials[];
+};
 
 struct PerMeshInfo
 {
@@ -39,15 +44,80 @@ struct PerMeshInfo
     int assimpMaterialIndex;
 };
 
-// layout(std430, set = 0, binding = Y) readonly buffer indirectDrawBuffer
-// {
-//     PerMeshInfo perMesh[];
-// } perMeshInfos;
+layout(std430, set = 0, binding = 10) readonly buffer indirectDrawBuffer
+{
+    PerMeshInfo perMesh[];
+} perMeshInfos;
 
 
 layout(set = 0, binding = 5, rgba32f) uniform image2D reflectionImage;
 
+
+vec3 samplePhong(in vec3 normal, in vec3 specularDir, const in float nShininess) {
+	///////////////////////////////////////////////////////////////
+	// Phong sampling (specular diffuse)
+	///////////////////////////////////////////////////////////////
+	float rand1 = rand();
+
+	float nShininess1_inv =  1.0f / (nShininess + 1.0f);
+	float cosThetaPhong = pow(rand1, nShininess1_inv);
+	float phiPhong = 2.0f * PI * rand();
+	float sinThetaPhong = sqrt(1.0f - cosThetaPhong * cosThetaPhong); //sin(acos(cosThetaPhong)) --- sin(arccos(x)) = sqrt(1-x^2)
+
+	float xPhong = sinThetaPhong * cos(phiPhong);	
+	float zPhong = sinThetaPhong * sin(phiPhong);
+
+	vec3 reflectDir = normalize(mix(specularDir, normal, nShininess1_inv));
+	vec3 tangent = normalize(abs(reflectDir.x) > abs(reflectDir.y) ? vec3(reflectDir.z, 0.f, -reflectDir.x) : vec3(0.f, -reflectDir.z, reflectDir.y));
+	vec3 bitangent = cross(reflectDir, tangent);
+	mat3 rotToSpecular = mat3(tangent, reflectDir, bitangent);
+
+	return normalize(rotToSpecular * vec3(xPhong, rand1, zPhong));
+}
+
 void main()
 {
     //TODO get mesh ID (from gbuffer) to get material ID
+
+    const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
+    const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeNV.xy);
+
+    randomInit(ivec2(gl_LaunchIDNV.xy));
+
+
+    vec4 originAndID = texture(gbufferPosSampler, inUV);
+    vec3 normal = normalize(texture(gbufferNormalSampler, inUV).xyz);
+
+    vec3 origin = originAndID.xyz;
+    int MeshID = int(originAndID.w);
+
+    PerMeshInfo currentMesh = perMeshInfos.perMesh[MeshID];
+    MaterialInfo currentMaterial = materials[currentMesh.assimpMaterialIndex];
+    //if(currentMaterial.N < 1) return; 
+
+    vec3 viewVector = normalize(origin - perFrameInfo.cameraPosWorld);
+
+    uint rayFlags = gl_RayFlagsOpaqueNV;
+    uint cullMask = 0xff;
+    float tmin = 0.001;
+    float tmax = 100000.0;
+    
+
+    vec3 specularDir = normalize(reflect(viewVector, normal));
+    vec3 direction = samplePhong(normal, specularDir, currentMaterial.N);
+
+    traceNV(topLevelAS, rayFlags, cullMask,
+        0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
+        origin, tmin, direction, tmax,
+        0 /*payload*/ // X here is location = X of the payload
+    );
+    
+    vec3 reflectionValue = hitValue;
+
+    float InvSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
+    vec3 oldValue = imageLoad(reflectionImage, ivec2(gl_LaunchIDNV.xy)).xyz;
+    reflectionValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * reflectionValue;
+    imageStore(reflectionImage, ivec2(gl_LaunchIDNV.xy), vec4(reflectionValue, 0.0));
+
+    randomFinish(ivec2(gl_LaunchIDNV.xy));
 }

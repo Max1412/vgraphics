@@ -14,11 +14,11 @@ namespace vg
     const auto g_resourcesPath = std::filesystem::current_path().parent_path().parent_path().append("resources");
     const auto g_shaderPath = std::filesystem::current_path().parent_path().parent_path().append("shaders");
 
-#ifdef NDEBUG
-    constexpr bool enableValidationLayers = false;
-#else
+//#ifdef NDEBUG
+//    constexpr bool enableValidationLayers = false;
+//#else
     constexpr bool enableValidationLayers = true;
-#endif
+//#endif
 
     struct RTperFrameInfo
     {
@@ -26,6 +26,14 @@ namespace vg
         float RTAORadius = 100.0f;
         int32_t RTAOSampleCount = 4;
     };
+
+	struct RTperFrameInfoCombined
+	{
+		glm::vec3 cameraPosWorld;
+		int32_t frameSampleCount = 0;
+		float RTAORadius = 100.0f;
+		int32_t RTAOSampleCount = 4;
+	};
 
     struct ImageLoadInfo
     {

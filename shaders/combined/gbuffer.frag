@@ -9,7 +9,6 @@ layout(location = 3) in vec3 passWorldPos;
 layout(location = 0) out vec4 gbufferPosition;
 layout(location = 1) out vec4 gbufferNormal;
 layout(location = 2) out vec4 gbufferUV;
-layout(location = 3) out int gbufferMeshID;
 
 layout(constant_id = 0) const int NUM_TEXTURES = 64;
 layout(set = 0, binding = 1) uniform sampler2D allTextures[NUM_TEXTURES];
@@ -39,5 +38,4 @@ void main()
     gbufferNormal = vec4(passNormal, 0.0f);
     vec2 lod = textureQueryLod(allTextures[perMeshInfos.perMesh[drawID].texIndex], fragTexCoord);
     gbufferUV = vec4(fragTexCoord, lod.x, lod.y);
-    gbufferMeshID = drawID;
 }
