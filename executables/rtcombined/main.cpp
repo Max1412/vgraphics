@@ -857,9 +857,9 @@ namespace vg
 
 
             // create light descriptor set layout, descriptor set
-            vk::DescriptorSetLayoutBinding dirLights(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-            vk::DescriptorSetLayoutBinding pointLights(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-            vk::DescriptorSetLayoutBinding spotLights(2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+            vk::DescriptorSetLayoutBinding dirLights(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+            vk::DescriptorSetLayoutBinding pointLights(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+            vk::DescriptorSetLayoutBinding spotLights(2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 
             std::array<vk::DescriptorSetLayoutBinding, 3> bindings = {
                 dirLights, pointLights, spotLights
@@ -1740,13 +1740,13 @@ namespace vg
 			//// 1. DSL
 			 // TODO streamline DSs: 1DS for Gbuffer, 1 for what all RT passes use, 1 per RT pass with anything else
 			 // AS
-			vk::DescriptorSetLayoutBinding asLB(0, vk::DescriptorType::eAccelerationStructureNV, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+			vk::DescriptorSetLayoutBinding asLB(0, vk::DescriptorType::eAccelerationStructureNV, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 			// GBuffer
 			vk::DescriptorSetLayoutBinding gbufferPos(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
 			vk::DescriptorSetLayoutBinding gbufferNormal(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
 			// add. info
         	vk::DescriptorSetLayoutBinding randomImageLB(3, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-			vk::DescriptorSetLayoutBinding rtPerFrame(4, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+			vk::DescriptorSetLayoutBinding rtPerFrame(4, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 			//output image
 			vk::DescriptorSetLayoutBinding reflectionImageLB(5, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
         	// info for shading
@@ -1777,14 +1777,22 @@ namespace vg
 			const auto missShaderCode = Utility::readFile("combined/rtreflections.rmiss.spv");
 			const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
+			const auto chitSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rchit.spv");
+			const auto chitSecondaryShaderModule = m_context.createShaderModule(chitSecondaryShaderCode);
+
+			const auto missSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rmiss.spv");
+			const auto missSecondaryShaderModule = m_context.createShaderModule(missSecondaryShaderCode);
+
 
 			std::array rtShaderStageInfos = {
 				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
 				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
-				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main")
+				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitSecondaryShaderModule, "main"),
+				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main"),
+				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missSecondaryShaderModule, "main")
 			};
 
-			std::array dss = { m_rtReflectionsDescriptorSetLayout };
+			std::array dss = { m_rtReflectionsDescriptorSetLayout, m_lightDescriptorSetLayout };
 			vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo({}, static_cast<uint32_t>(dss.size()), dss.data());
 
 			m_rtReflectionsPipelineLayout = m_context.getDevice().createPipelineLayout(pipelineLayoutCreateInfo);
@@ -1792,10 +1800,15 @@ namespace vg
 			std::array shaderGroups = {
 				// group 0: raygen
 				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
-				// group 1: closest hit
+				// group 1: closest hit (for reflections)
 				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
-				// group 2: miss
-				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
+				// group 2: closest hit (for secondary rays: shadows in reflection)
+				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
+				// group 3: miss (for reflection rays)
+				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 3, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
+				// group 4: miss (for secondary rays: shadows in reflection)
+				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 4, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
+
 			};
 
 			vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
@@ -1812,6 +1825,8 @@ namespace vg
 			m_context.getDevice().destroyShaderModule(rgenShaderModule);
 			m_context.getDevice().destroyShaderModule(chitShaderModule);
 			m_context.getDevice().destroyShaderModule(missShaderModule);
+			m_context.getDevice().destroyShaderModule(chitSecondaryShaderModule);
+			m_context.getDevice().destroyShaderModule(missSecondaryShaderModule);
 
 			//// 3. Create Shader Binding Table
 
@@ -1884,10 +1899,9 @@ namespace vg
 
 				vk::WriteDescriptorSet descWriteAllImages(m_rtReflectionsDescriptorSets.at(i), 11, 0, static_cast<uint32_t>(m_allImages.size()), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
 
-
 				std::array descriptorWrites = { accelerationStructureWrite,gbufferPosImageWrite, gbufferNormalImageWrite, randomImageWrite,
 					rtPerFrameWrite , reflectionImageWrite, descWriteVertexBuffer, descWriteIndexBuffer, descWriteOffsetBuffer,
-					descWriteMaterialBuffer, descWriteIndirectBuffer, descWriteAllImages };
+					descWriteMaterialBuffer, descWriteIndirectBuffer, descWriteAllImages};
 				m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
 			}
         }
@@ -2172,7 +2186,7 @@ namespace vg
 				m_rtReflectionsSecondaryCommandBuffers.at(i).begin(beginInfo3);
 
 				m_rtReflectionsSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rtReflectionsPipeline);
-				std::array dss3 = { m_rtReflectionsDescriptorSets.at(i) };
+				std::array dss3 = { m_rtReflectionsDescriptorSets.at(i), m_lightDescriptorSet };
 				m_rtReflectionsSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rtReflectionsPipelineLayout,
 					0, static_cast<uint32_t>(dss3.size()), dss3.data(), 0, nullptr);
 
@@ -2192,7 +2206,7 @@ namespace vg
 
 				OwnCmdTraceRays(m_rtReflectionsSecondaryCommandBuffers.at(i),
 					m_rtReflectionsSBTInfo.m_Buffer, 0, // raygen
-					m_rtReflectionsSBTInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+					m_rtReflectionsSBTInfo.m_Buffer, 3 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
 					m_rtReflectionsSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // closest hit
 					nullptr, 0, 0, // callable
 					m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1

@@ -52,6 +52,18 @@ layout(std430, set = 0, binding = 10) readonly buffer indirectDrawBuffer
 
 layout(set = 0, binding = 5, rgba32f) uniform image2D reflectionImage;
 
+// radical inverse function
+float RadicalInverse(uint bits) 
+{
+    return float(bitfieldReverse(bits)) * 2.3283064365386963e-10; // / 0x100000000
+}
+
+// generate hammersley sequence using RIF
+vec2 Hammersley(uint i, uint N)
+{
+    return vec2(float(i)/float(N), RadicalInverse(i));
+}  
+
 
 vec3 samplePhong(in vec3 normal, in vec3 specularDir, const in float nShininess) {
 	///////////////////////////////////////////////////////////////

@@ -201,5 +201,5 @@ void main()
   
     outColor = vec4(mapped, 1.0f);
 
-    outColor = vec4(reflectionColor, 1.0f);
+    //outColor = vec4(reflectionColor, 1.0f);
 }

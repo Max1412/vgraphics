@@ -198,6 +198,8 @@ Scene::Scene(const std::filesystem::path& filename)
         
     }
 
+	m_allMaterials.at(m_meshes.at(118).assimpMaterialIndex).N = 500;
+
 
 
     int uniqueTexIndex = 0;
