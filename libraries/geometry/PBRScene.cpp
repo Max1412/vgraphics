@@ -1,17 +1,18 @@
-#include "scene.h"
+#include "PBRScene.h"
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <functional>
+#include <glm/gtx/matrix_major_storage.inl>
 
 
-Scene::Scene(const std::filesystem::path& filename)
+PBRScene::PBRScene(const std::filesystem::path& filename)
 {
 	auto logger = spdlog::get("standard");
 
 	auto path = vg::g_resourcesPath / filename;
 
-	logger->info("Loading model from {}", path.string().c_str());
+	logger->info("Loading PBR model from {}", path.string().c_str());
 
     Assimp::Importer importer;
 
@@ -50,7 +51,7 @@ Scene::Scene(const std::filesystem::path& filename)
     // process all meshes in the scene
     for (unsigned i = 0; i < numMeshes; i++)
     {
-        PerMeshInfo currentMesh;
+        PerMeshInfoPBR currentMesh;
         currentMesh.instanceCount = 1;
 
         auto numVertices = scene->mMeshes[i]->mNumVertices;
@@ -96,8 +97,7 @@ Scene::Scene(const std::filesystem::path& filename)
     }
 
 	m_modelMatrices = std::vector<glm::mat4>(m_meshes.size(), glm::mat4(1.0f));
-    m_allMaterials = std::vector<MaterialInfo>(m_meshes.size(), MaterialInfo());
-
+	m_allMaterials = std::vector<MaterialInfoPBR>(m_meshes.size(), MaterialInfoPBR());
     // accumulate all hierarchical transformations to model matrices
     const auto root = scene->mRootNode;
     const glm::mat4 startTransform(1.0f);
@@ -111,7 +111,7 @@ Scene::Scene(const std::filesystem::path& filename)
             [](float f) { return std::isnan(f) || std::isinf(f); }))
         {
             // accumulate transform
-            const glm::mat4 transform = reinterpret_cast<glm::mat4&>(node->mTransformation);
+            const glm::mat4 transform = glm::rowMajor4(reinterpret_cast<glm::mat4&>(node->mTransformation));
             trans *= transform;
         }
 
@@ -139,7 +139,7 @@ Scene::Scene(const std::filesystem::path& filename)
 
     // maybe throw this out
     if (!scene->HasMaterials())
-        throw std::runtime_error("No Materials in Scene");
+        throw std::runtime_error("No Materials in PBRScene");
 
 	auto getTexturePaths = [&](const aiMaterial* mat, aiTextureType type, auto& set, auto& vec, const int index)
 	{
@@ -168,15 +168,15 @@ Scene::Scene(const std::filesystem::path& filename)
     {
         const auto mat = scene->mMaterials[i];
         // todo other types
-        for(aiTextureType type : {aiTextureType_DIFFUSE, aiTextureType_SPECULAR})
+        for(aiTextureType type : {aiTextureType_DIFFUSE, aiTextureType_UNKNOWN}) // unknown = metallic roughness in this case
         {
 	        switch (type)
 	        {
 			case aiTextureType_DIFFUSE:
-				getTexturePaths(mat, type, m_texturesDiffusePathSet, m_indexedDiffuseTexturePaths, i);
+				getTexturePaths(mat, type, m_texturesBaseColorPathSet, m_indexedBaseColorTexturePaths, i);
 				break;
-			case aiTextureType_SPECULAR:
-				getTexturePaths(mat, type, m_texturesSpecularPathSet, m_indexedSpecularTexturePaths, i);
+			case aiTextureType_UNKNOWN:
+				getTexturePaths(mat, type, m_texturesMetallicRoughnessPathSet, m_indexedMetallicRoughnessTexturePaths, i);
 				break;
 			default:
 				break;
@@ -185,39 +185,44 @@ Scene::Scene(const std::filesystem::path& filename)
 
         // other material info
 		aiColor3D diffColor;
-    	mat->Get(AI_MATKEY_COLOR_DIFFUSE, diffColor);
-        m_allMaterials.at(i).diffColor = reinterpret_cast<glm::vec3&>(diffColor);
+    	auto ret = mat->Get("$mat.gltf.pbrMetallicRoughness.baseColorFactor", 0, 0, diffColor);
+		if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
+        m_allMaterials.at(i).baseColor = reinterpret_cast<glm::vec3&>(diffColor);
 
-		aiColor3D specColor;
-		mat->Get(AI_MATKEY_COLOR_SPECULAR, specColor);
-        m_allMaterials.at(i).specColor = reinterpret_cast<glm::vec3&>(specColor);
+		ret = mat->Get("$mat.gltf.pbrMetallicRoughness.metallicFactor", 0, 0, m_allMaterials.at(i).metalness);
+		if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
 
-        mat->Get(AI_MATKEY_SHININESS, m_allMaterials.at(i).N);
+		ret = mat->Get("$mat.gltf.pbrMetallicRoughness.roughnessFactor", 0,0, m_allMaterials.at(i).roughness);
+		if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
+
+		if(m_allMaterials.at(i).metalness > 0.5)
+			m_allMaterials.at(i).f0 = glm::vec3(0.91f, 0.92f, 0.92f); // f0: aluminium, gltf does not contain anything
+		else
+			m_allMaterials.at(i).f0 = glm::vec3(0.04f, 0.04f, 0.04f); // f0: dielectrics
         
     }
 
-	m_allMaterials.at(m_meshes.at(118).assimpMaterialIndex).N = 500;
 
 
 
     int uniqueTexIndex = 0;
-    for(const auto& indexTexPair : m_indexedDiffuseTexturePaths)
+    for(const auto& indexTexPair : m_indexedBaseColorTexturePaths)
     {
         for (unsigned index : indexTexPair.first)
             for (auto& mesh : m_meshes)
                 if (mesh.assimpMaterialIndex == index)
-                    mesh.texIndex = uniqueTexIndex;
+                    mesh.texIndexBaseColor = uniqueTexIndex;
 
         uniqueTexIndex++;
     }
 
 	int uniqueSpecTexIndex = 0;
-	for (const auto& indexTexPair : m_indexedSpecularTexturePaths)
+	for (const auto& indexTexPair : m_indexedMetallicRoughnessTexturePaths)
 	{
 		for (unsigned index : indexTexPair.first)
 			for (auto& mesh : m_meshes)
 				if (mesh.assimpMaterialIndex == index)
-					mesh.texSpecIndex = uniqueSpecTexIndex + static_cast<int32_t>(m_indexedDiffuseTexturePaths.size());
+					mesh.texIndexMetallicRoughness = uniqueSpecTexIndex + static_cast<int32_t>(m_indexedBaseColorTexturePaths.size());
 
 		uniqueSpecTexIndex++;
 	}
