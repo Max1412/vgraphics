@@ -75,3 +75,70 @@ void LightManager::lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::Buff
         ImGui::EndMenu();
     }
 }
+
+
+PBRLightManager::PBRLightManager(std::vector<PBRDirectionalLight> dirLights, std::vector<PBRPointLight> pointLights, std::vector<PBRSpotLight> spotLights) :
+	m_directionalLights(std::move(dirLights)), m_pointLights(std::move(pointLights)), m_spotLights(std::move(spotLights))
+{
+}
+
+void PBRLightManager::lightGUI(const vg::BufferInfo& dirLightBuffer, const vg::BufferInfo& pointLightBuffer, const vg::BufferInfo& spotLightBuffer, const bool showRT) const
+{
+	if (ImGui::BeginMenu("Lights"))
+	{
+		std::string dirName("Directional Light  ");
+		std::string pointName("Point Light  ");
+		std::string spotName("Spot Light  ");
+
+		for (size_t i = 0; i < m_directionalLights.size(); i++)
+		{
+			dirName.replace(dirName.size() - 1, 1, std::to_string(i));
+			if (ImGui::CollapsingHeader(dirName.c_str()))
+			{
+				PBRDirectionalLight* currentLight = reinterpret_cast<PBRDirectionalLight*>(dirLightBuffer.m_BufferAllocInfo.pMappedData) + i;
+				if (ImGui::DragFloat3((std::string("Intensity ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->intensity))) {}
+				if (ImGui::SliderFloat3((std::string("Direction ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->direction), -1.0f, 1.0f)) {}
+				if (showRT)
+				{
+					if (ImGui::SliderInt((std::string("Directional Shadow Samples ") + std::to_string(i)).c_str(), &currentLight->numShadowSamples, 1, 64)) {}
+				}
+			}
+		}
+		for (size_t i = 0; i < m_pointLights.size(); i++)
+		{
+			pointName.replace(pointName.size() - 1, 1, std::to_string(i));
+			if (ImGui::CollapsingHeader(pointName.c_str()))
+			{
+				PBRPointLight* currentLight = reinterpret_cast<PBRPointLight*>(pointLightBuffer.m_BufferAllocInfo.pMappedData) + i;
+				if (ImGui::DragFloat3((std::string("Point Intensity ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->intensity))) {}
+				if (ImGui::DragFloat3((std::string("Point Position ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->position))) {}
+				if (ImGui::DragFloat((std::string("Point Radius ") + std::to_string(i)).c_str(), &currentLight->radius, 0.25f, 0.0f, 100.0f)) {}
+				if (showRT)
+				{
+					if (ImGui::SliderInt((std::string("Point Shadow Samples ") + std::to_string(i)).c_str(), &currentLight->numShadowSamples, 1, 64)) {}
+				}
+
+			}
+		}
+		for (size_t i = 0; i < m_spotLights.size(); i++)
+		{
+			spotName.replace(spotName.size() - 1, 1, std::to_string(i));
+			if (ImGui::CollapsingHeader(spotName.c_str()))
+			{
+				PBRSpotLight* currentLight = reinterpret_cast<PBRSpotLight*>(spotLightBuffer.m_BufferAllocInfo.pMappedData) + i;
+				if (ImGui::DragFloat3((std::string("Spot Intensity ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->intensity))) {}
+				if (ImGui::DragFloat3((std::string("Spot Position ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->position))) {}
+				if (ImGui::SliderFloat3((std::string("Spot Direction ") + std::to_string(i)).c_str(), glm::value_ptr(currentLight->direction), -1.0f, 1.0f)) {}
+				if (ImGui::SliderFloat((std::string("Spot Cutoff ") + std::to_string(i)).c_str(), &currentLight->cutoff, 0.0f, glm::radians(90.0f))) {}
+				if (ImGui::SliderFloat((std::string("Spot Outer Cutoff ") + std::to_string(i)).c_str(), &currentLight->outerCutoff, 0.0f, glm::radians(90.0f))) {}
+				if (ImGui::DragFloat((std::string("Spot Radius ") + std::to_string(i)).c_str(), &currentLight->radius, 0.25f, 0.0f, 100.0f)) {}
+				if (showRT)
+				{
+					if (ImGui::SliderInt((std::string("Spot Shadow Samples ") + std::to_string(i)).c_str(), &currentLight->numShadowSamples, 1, 64)) {}
+				}
+
+			}
+		}
+		ImGui::EndMenu();
+	}
+}

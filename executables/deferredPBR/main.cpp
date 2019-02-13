@@ -718,44 +718,38 @@ namespace vg
 
         void createLightStuff()
         {
-            DirectionalLight dirLight;
-            dirLight.intensity = glm::vec3(15.0f);
+            PBRDirectionalLight dirLight;
+            dirLight.intensity = glm::vec3(150.0f);
             dirLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
 
-            PointLight pointLight;
-            pointLight.position = glm::vec3(0.0f, 100.0f, 0.0f);
-            pointLight.intensity = glm::vec3(15.0f);
-            pointLight.constant = 0.025f;
-            pointLight.linear = 0.01f;
-            pointLight.quadratic = 0.0f;
+            PBRPointLight pointLight;
+            pointLight.position = glm::vec3(0.0f, 10.0f, 0.0f);
+            pointLight.intensity = glm::vec3(150.0f);
             pointLight.radius = 1.0f;
 
-            SpotLight spotLight;
-            spotLight.position = glm::vec3(0.0f, 100.0f, 0.0f);
+            PBRSpotLight spotLight;
+            spotLight.position = glm::vec3(3.0f, 10.0f, 3.0f);
             spotLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-            spotLight.intensity = glm::vec3(15.0f);
-            spotLight.constant = 0.025f;
-            spotLight.linear = 0.01f;
-            spotLight.quadratic = 0.0f;
+            spotLight.intensity = glm::vec3(150.0f);
             spotLight.cutoff = 1.0f;
             spotLight.outerCutoff = 0.75f;
             spotLight.radius = 1.0f;
 
-            m_lightManager = LightManager(std::vector<DirectionalLight>{dirLight}, std::vector<PointLight>{pointLight}, std::vector<SpotLight>{spotLight});
+            m_lightManager = PBRLightManager(std::vector<PBRDirectionalLight>{dirLight}, std::vector<PBRPointLight>{pointLight}, std::vector<PBRSpotLight>{spotLight});
 
             
             // create buffers for lights. buffers are persistently mapped //TODO make lightmanager manage the light buffers with functions for access
-            m_lightBufferInfos.push_back(createBuffer(sizeof(DirectionalLight) * m_lightManager.getDirectionalLights().size(), vk::BufferUsageFlagBits::eStorageBuffer,
+            m_lightBufferInfos.push_back(createBuffer(sizeof(PBRDirectionalLight) * m_lightManager.getDirectionalLights().size(), vk::BufferUsageFlagBits::eStorageBuffer,
                 VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT));
-            memcpy(m_lightBufferInfos.at(0).m_BufferAllocInfo.pMappedData, m_lightManager.getDirectionalLights().data(), sizeof(DirectionalLight) * m_lightManager.getDirectionalLights().size());
+            memcpy(m_lightBufferInfos.at(0).m_BufferAllocInfo.pMappedData, m_lightManager.getDirectionalLights().data(), sizeof(PBRDirectionalLight) * m_lightManager.getDirectionalLights().size());
 
-            m_lightBufferInfos.push_back(createBuffer(sizeof(PointLight) * m_lightManager.getPointLights().size(), vk::BufferUsageFlagBits::eStorageBuffer,
+            m_lightBufferInfos.push_back(createBuffer(sizeof(PBRPointLight) * m_lightManager.getPointLights().size(), vk::BufferUsageFlagBits::eStorageBuffer,
                 VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT));
-            memcpy(m_lightBufferInfos.at(1).m_BufferAllocInfo.pMappedData, m_lightManager.getPointLights().data(), sizeof(PointLight) * m_lightManager.getPointLights().size());
+            memcpy(m_lightBufferInfos.at(1).m_BufferAllocInfo.pMappedData, m_lightManager.getPointLights().data(), sizeof(PBRPointLight) * m_lightManager.getPointLights().size());
 
-            m_lightBufferInfos.push_back(createBuffer(sizeof(SpotLight) * m_lightManager.getSpotLights().size(), vk::BufferUsageFlagBits::eStorageBuffer,
+            m_lightBufferInfos.push_back(createBuffer(sizeof(PBRSpotLight) * m_lightManager.getSpotLights().size(), vk::BufferUsageFlagBits::eStorageBuffer,
                 VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT));
-            memcpy(m_lightBufferInfos.at(2).m_BufferAllocInfo.pMappedData, m_lightManager.getSpotLights().data(), sizeof(SpotLight) * m_lightManager.getSpotLights().size());
+            memcpy(m_lightBufferInfos.at(2).m_BufferAllocInfo.pMappedData, m_lightManager.getSpotLights().data(), sizeof(PBRSpotLight) * m_lightManager.getSpotLights().size());
 
 
             // create light descriptor set layout, descriptor set
@@ -1171,7 +1165,7 @@ namespace vg
         std::vector<BufferInfo> m_lightBufferInfos;
         vk::DescriptorSetLayout m_lightDescriptorSetLayout;
         vk::DescriptorSet m_lightDescritporSet;
-        LightManager m_lightManager;
+        PBRLightManager m_lightManager;
 
         // Sync Objects
     };
