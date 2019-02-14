@@ -135,13 +135,19 @@ void main()
     vec3 R = reflect(-V, N);
                
     vec3 Lo = vec3(0.0);
-    for(int i = 0; i < dirLights.length(); ++i) //TODO trace reflection rays!!
+    for(int i = 0; i < dirLights.length(); ++i) //TODO cull shadow rays/don't calculate rest if ray didnt hit
     {
         // get light parameters
         PBRDirectionalLight currentLight = dirLights[i];
 
         // light vector
         vec3 L = normalize(-currentLight.direction);
+
+        traceNV(topLevelAS, rayFlags, cullMask,
+            1 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 1 /*missIndex*/,
+            WorldPos, 0.001, L, 10000.0f,
+            1 /*payload*/ // X here is location = X of the payload
+        );
 
         // halfway vector
         vec3 H = normalize(V + L);
@@ -165,7 +171,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
     }   
 
     for(int i = 0; i < pointLights.length(); ++i) 
@@ -175,6 +181,12 @@ void main()
 
         // light vector
         vec3 L = normalize(currentLight.position - WorldPos);
+
+        traceNV(topLevelAS, rayFlags, cullMask,
+            1 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 1 /*missIndex*/,
+            WorldPos, 0.001, L, length(currentLight.position - WorldPos),
+            1 /*payload*/ // X here is location = X of the payload
+        );
 
         // halfway vector
         vec3 H = normalize(V + L);
@@ -200,7 +212,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
     }
 
     for(int i = 0; i < spotLights.length(); ++i) 
@@ -210,6 +222,12 @@ void main()
 
         // light vector
         vec3 L = normalize(currentLight.position - WorldPos);
+
+        traceNV(topLevelAS, rayFlags, cullMask,
+            1 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 1 /*missIndex*/,
+            WorldPos, 0.001, L, length(currentLight.position - WorldPos),
+            1 /*payload*/ // X here is location = X of the payload
+        );
 
         // halfway vector
         vec3 H = normalize(V + L);
@@ -222,8 +240,9 @@ void main()
         // spotlight intensity (falloff to sides of spot)
         float theta = dot(L, normalize(-currentLight.direction));
         float epsilon = currentLight.cutoff - currentLight.outerCutoff;
-        radiance *= clamp((theta - currentLight.outerCutoff) / epsilon, 0.0, 1.0);       
-        
+        float spotIntensity = clamp((theta - currentLight.outerCutoff) / epsilon, 0.0, 1.0);       
+        radiance *= spotIntensity;
+
         // calculate the parts of the Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);        
         float G   = GeometrySmith(N, V, L, roughness);      
@@ -240,7 +259,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
     }
 
     vec3 ambient = vec3(0.03) * albedo; // no AO here

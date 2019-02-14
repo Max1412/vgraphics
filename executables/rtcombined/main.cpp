@@ -792,18 +792,18 @@ namespace vg
         void createLightStuff()
         {
             PBRDirectionalLight dirLight;
-            dirLight.intensity = glm::vec3(150.0f);
+            dirLight.intensity = glm::vec3(0.0f);
             dirLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
 
             PBRPointLight pointLight;
             pointLight.position = glm::vec3(0.0f, 10.0f, 0.0f);
-            pointLight.intensity = glm::vec3(150.0f);
+            pointLight.intensity = glm::vec3(10.0f);
             pointLight.radius = 1.0f;
 
             PBRSpotLight spotLight;
             spotLight.position = glm::vec3(3.0f, 10.0f, 3.0f);
             spotLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-            spotLight.intensity = glm::vec3(150.0f);
+            spotLight.intensity = glm::vec3(100.0f);
             spotLight.cutoff = 1.0f;
             spotLight.outerCutoff = 0.75f;
             spotLight.radius = 1.0f;
