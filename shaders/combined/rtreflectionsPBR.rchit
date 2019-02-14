@@ -1,10 +1,60 @@
 #version 460
-#extension GL_ARB_separate_shader_objects : enable
+#extension GL_NV_ray_tracing : require
 const float PI = 3.1415926535;
 
-layout (location = 0) in vec2 inUV;
+layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
 
-layout (location = 0) out vec4 outColor;
+layout(location = 0) rayPayloadInNV vec3 hitValue;
+hitAttributeNV vec2 attribs;
+layout(location = 1) rayPayloadNV int rtSecondaryShadow;
+
+layout(constant_id = 0) const int NUM_TEXTURES = 64;
+layout(set = 0, binding = 11) uniform sampler2D allTextures[NUM_TEXTURES];
+
+struct VertexInfo
+{
+    vec3 pos;
+    vec2 uv;
+    vec3 normal;
+};
+
+layout(std430, set = 0, binding = 6) readonly buffer vertexBuffer
+{
+    VertexInfo vertices[];
+} vertexInfos;
+
+layout(std430, set = 0, binding = 7) readonly buffer indexBuffer
+{
+    uint indices[];
+} indexInfos;
+
+
+struct OffsetInfo
+{
+    int m_vbOffset;
+    int m_ibOffset;
+    int m_diffTextureID;
+    int m_specTextureID;
+};
+
+layout(std430, set = 0, binding = 8) readonly buffer offsetBuffer
+{
+    OffsetInfo offsets[];
+} offsetInfos;
+
+
+struct MaterialInfoPBR
+{
+	vec3 baseColor;
+	float roughness;
+	vec3 f0;
+	float metalness;
+};
+
+layout(set = 0, binding = 9) readonly buffer materialBuffer
+{
+    MaterialInfoPBR materials[];
+};
 
 struct PerMeshInfoPBR
 {
@@ -20,80 +70,72 @@ struct PerMeshInfoPBR
     int assimpMaterialIndex;
 };
 
-layout(std430, set = 0, binding = 0) readonly buffer indirectDrawBuffer
+layout(std430, set = 0, binding = 10) readonly buffer indirectDrawBuffer
 {
     PerMeshInfoPBR perMesh[];
 } perMeshInfos;
 
-layout(constant_id = 0) const int NUM_TEXTURES = 64;
-layout(set = 0, binding = 1) uniform sampler2D allTextures[NUM_TEXTURES];
-layout(set = 0, binding = 2) uniform sampler2D gbufferPositionSampler;
-layout(set = 0, binding = 3) uniform sampler2D gbufferNormalSampler;
-layout(set = 0, binding = 4) uniform sampler2D gbufferUVSampler;
+#include "structs.glsl"
 
-struct MaterialInfoPBR
+layout(set = 0, binding = 4) readonly buffer rtPerFrameBuffer
 {
-	vec3 baseColor;
-	float roughness;
-	vec3 f0;
-	float metalness;
+    RTperFrameInfo2 perFrameInfo;
 };
-
-layout(set = 0, binding = 5) readonly buffer materialBuffer
-{
-    MaterialInfoPBR materials[];
-};
-
-layout (push_constant) uniform perFramePush
-{
-    mat4 view;
-    mat4 proj;
-    vec4 cameraPos;
-} matrices;
 
 #include "pbrLight.glsl"
 
-void main() 
+void main()
 {
-    vec4 posAndID = texture(gbufferPositionSampler, inUV);
-    vec3 WorldPos = posAndID.xyz;
-    int drawID = int(posAndID.w);
+    vec3 barycentrics = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
+    //hitValue = barycentrics;
 
-    // ID -1 means no geometry (background)
-    if (drawID == -1) discard;
+    OffsetInfo currentOffset = offsetInfos.offsets[gl_InstanceCustomIndexNV];
 
-    // normal in world space
-    vec3 N = normalize(texture(gbufferNormalSampler, inUV).xyz); 
+    uint index0 = indexInfos.indices[currentOffset.m_ibOffset + (3 * gl_PrimitiveID + 0)];
+    uint index1 = indexInfos.indices[currentOffset.m_ibOffset + (3 * gl_PrimitiveID + 1)];
+    uint index2 = indexInfos.indices[currentOffset.m_ibOffset + (3 * gl_PrimitiveID + 2)];
 
-    PerMeshInfoPBR currentMeshInfo = perMeshInfos.perMesh[drawID];
-    vec4 uvLOD = texture(gbufferUVSampler, inUV);
+    VertexInfo vertex0 = vertexInfos.vertices[currentOffset.m_vbOffset + index0];
+    VertexInfo vertex1 = vertexInfos.vertices[currentOffset.m_vbOffset + index1];
+    VertexInfo vertex2 = vertexInfos.vertices[currentOffset.m_vbOffset + index2];
 
+    const vec2 uv = barycentrics.x * vertex0.uv + barycentrics.y * vertex1.uv + barycentrics.z * vertex2.uv;
+
+    // ray stuff
+    uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV;
+    uint cullMask = 0xff;
+
+    // LIGHTING SHADER STARTS HERE --- KEEP UP TO DATE
+    vec3 WorldPos = gl_WorldRayOriginNV + gl_WorldRayDirectionNV * gl_HitTNV;
+    vec3 N = normalize(barycentrics.x * vertex0.normal + barycentrics.y * vertex1.normal + barycentrics.z * vertex2.normal);
+
+    PerMeshInfoPBR currentMeshInfo = perMeshInfos.perMesh[gl_InstanceCustomIndexNV];
     MaterialInfoPBR material = materials[currentMeshInfo.assimpMaterialIndex];
 
+    
     vec3 albedo = vec3(0.0f);
     if(currentMeshInfo.texIndexBaseColor != -1)
-        albedo = textureLod(allTextures[currentMeshInfo.texIndexBaseColor], uvLOD.xy, uvLOD.w).xyz;
+        albedo = texture(allTextures[currentMeshInfo.texIndexBaseColor], uv).xyz;
     else
-        albedo = material.baseColor;
+        albedo = material.baseColor;;
 
     vec3 metallicRoughness = vec3(0.0f);
     if(currentMeshInfo.texIndexMetallicRoughness != -1)
-        metallicRoughness = textureLod(allTextures[currentMeshInfo.texIndexMetallicRoughness], uvLOD.xy, uvLOD.w).xyz;
+        metallicRoughness = texture(allTextures[currentMeshInfo.texIndexMetallicRoughness], uv).xyz;
     else
         metallicRoughness = vec3(material.metalness, material.roughness, 0.0f); // what is z?
 
     float metallic = metallicRoughness.x;
     float roughness = metallicRoughness.y + 0.01;
 
-    // viewing vector
-    vec3 V = normalize(matrices.cameraPos.xyz - WorldPos);
+   // viewing vector
+    vec3 V = normalize(perFrameInfo.cameraPosWorld - WorldPos);
 
     // reflection vector
     vec3 R = reflect(-V, N);
                
     vec3 Lo = vec3(0.0);
-
-    for(int i = 0; i < dirLights.length(); ++i) 
+    for(int i = 0; i < dirLights.length(); ++i) //TODO trace reflection rays!!
     {
         // get light parameters
         PBRDirectionalLight currentLight = dirLights[i];
@@ -201,22 +243,9 @@ void main()
         Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
     }
 
-    float ao = 1.0f;
-    vec3 ambient = vec3(0.03) * albedo * ao;
+    vec3 ambient = vec3(0.03) * albedo; // no AO here
     vec3 color = ambient + Lo;
 
-    // ////////////// TONEMAPPING
-    // const float exposure = 1.0f;
-    // const float gamma = 2.2f;
-    
-    // // R E I N H A R D
-    // // Exposure tone mapping
-    // vec3 mapped = vec3(1.0) - exp(-color * exposure);
-    // // Gamma correction 
-    // mapped = pow(mapped, vec3(1.0 / gamma));
+    hitValue = color;
 
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));  
-  
-    outColor = vec4(color, 1.0f);
 }

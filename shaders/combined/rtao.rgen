@@ -1,5 +1,6 @@
 #version 460
 #extension GL_NV_ray_tracing : require
+const float PI = 3.1415926535;
 
 layout(location = 0) rayPayloadNV float hitValue;
 

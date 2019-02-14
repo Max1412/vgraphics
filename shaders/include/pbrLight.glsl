@@ -1,5 +1,3 @@
-const float PI = 3.14159265359;
-
 struct PBRDirectionalLight
 {
     vec3 direction;

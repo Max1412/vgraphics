@@ -16,7 +16,7 @@
 #include "graphic/BaseApp.h"
 #include "graphic/Definitions.h"
 #include "userinput/Pilotview.h"
-#include "geometry/scene.h"
+#include "geometry/PBRScene.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -38,10 +38,10 @@ namespace vg
         RTCombinedApp() :
     		BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
     		m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
-			m_scene("Sponza/sponza.obj")
+			m_scene("pica_pica_-_mini_diorama_01/scene.gltf")
 		{
             createCommandPools();
-			createSceneInformation("Sponza/");
+			createSceneInformation("pica_pica_-_mini_diorama_01/");
 
             createDepthResources();
 
@@ -590,7 +590,7 @@ namespace vg
         {
 
             const auto vertShaderCode = Utility::readFile("deferred/fullscreen.vert.spv");
-            const auto fragShaderCode = Utility::readFile("combined/fullscreenLighting.frag.spv");
+            const auto fragShaderCode = Utility::readFile("combined/fullscreenLightingPBR_RT.frag.spv");
 
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
@@ -744,24 +744,24 @@ namespace vg
         {
             m_context.getLogger()->info("Loading Textures...");
             // load all images
-            std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedDiffuseTexturePaths().size() + m_scene.getIndexedSpecularTexturePaths().size());
+            std::vector<ImageLoadInfo> loadedImages(m_scene.getIndexedBaseColorTexturePaths().size() + m_scene.getIndexedMetallicRoughnessTexturePaths().size());
             stbi_set_flip_vertically_on_load(true);
 
 #pragma omp parallel for
-            for (int i = 0; i < static_cast<int>(m_scene.getIndexedDiffuseTexturePaths().size()); i++)
+            for (int i = 0; i < static_cast<int>(m_scene.getIndexedBaseColorTexturePaths().size()); i++)
             {
                 auto path = g_resourcesPath;
-                const auto name = std::string(std::string(foldername) + m_scene.getIndexedDiffuseTexturePaths().at(i).second);
+                const auto name = std::string(std::string(foldername) + m_scene.getIndexedBaseColorTexturePaths().at(i).second);
                 path.append(name);
                 loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
                 loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
             }
 
 #pragma omp parallel for
-            for (int i = static_cast<int>(m_scene.getIndexedDiffuseTexturePaths().size()); i < static_cast<int>(loadedImages.size()); i++)
+            for (int i = static_cast<int>(m_scene.getIndexedBaseColorTexturePaths().size()); i < static_cast<int>(loadedImages.size()); i++)
             {
                 auto path = g_resourcesPath;
-                const auto name = std::string(std::string(foldername) + m_scene.getIndexedSpecularTexturePaths().at(i - m_scene.getIndexedDiffuseTexturePaths().size()).second);
+                const auto name = std::string(std::string(foldername) + m_scene.getIndexedMetallicRoughnessTexturePaths().at(i - m_scene.getIndexedBaseColorTexturePaths().size()).second);
                 path.append(name);
                 loadedImages.at(i).pixels = stbi_load(path.string().c_str(), &loadedImages.at(i).texWidth, &loadedImages.at(i).texHeight, &loadedImages.at(i).texChannels, STBI_rgb_alpha);
                 loadedImages.at(i).mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(loadedImages.at(i).texWidth, loadedImages.at(i).texHeight)))) + 1;
@@ -791,55 +791,24 @@ namespace vg
 
         void createLightStuff()
         {
-            DirectionalLight dirLight;
-            dirLight.intensity = glm::vec3(0.0f);
+            PBRDirectionalLight dirLight;
+            dirLight.intensity = glm::vec3(150.0f);
             dirLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-            dirLight.numShadowSamples = 2;
 
-            PointLight pointLight;
-            pointLight.intensity = glm::vec3(15.0f, 0.0f, 0.0f);
-            pointLight.position = glm::vec3(0.0f, 100.0f, 0.0f);
-            pointLight.constant = 0.025f;
-            pointLight.linear = 0.01f;
-            pointLight.quadratic = 0.0f;
+            PBRPointLight pointLight;
+            pointLight.position = glm::vec3(0.0f, 10.0f, 0.0f);
+            pointLight.intensity = glm::vec3(150.0f);
             pointLight.radius = 1.0f;
-            pointLight.numShadowSamples = 2;
 
-            PointLight pointLight2;
-            pointLight2.intensity = glm::vec3(0.0f, 15.0, 0.0f);
-            pointLight2.position = glm::vec3(0.0f, 100.0f, 100.0f);
-            pointLight2.constant = 0.025f;
-            pointLight2.linear = 0.01f;
-            pointLight2.quadratic = 0.0f;
-            pointLight2.radius = 1.0f;
-            pointLight2.numShadowSamples = 2;
-
-
-            SpotLight spotLight;
-            spotLight.intensity = glm::vec3(0.0f, 0.0f, 15.0f);
-            spotLight.position = glm::vec3(0.0f, 100.0f, 0.0f);
+            PBRSpotLight spotLight;
+            spotLight.position = glm::vec3(3.0f, 10.0f, 3.0f);
             spotLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-            spotLight.constant = 0.025f;
-            spotLight.linear = 0.01f;
-            spotLight.quadratic = 0.0f;
+            spotLight.intensity = glm::vec3(150.0f);
             spotLight.cutoff = 1.0f;
             spotLight.outerCutoff = 0.75f;
             spotLight.radius = 1.0f;
-            spotLight.numShadowSamples = 2;
 
-            SpotLight spotLight2;
-            spotLight2.intensity = glm::vec3(15.0f, 15.0f, 0.0f);
-            spotLight2.position = glm::vec3(0.0f, 100.0f, 0.0f);
-            spotLight2.direction = glm::vec3(0.0f, 0.0f, 1.0f);
-            spotLight2.constant = 0.025f;
-            spotLight2.linear = 0.01f;
-            spotLight2.quadratic = 0.0f;
-            spotLight2.cutoff = 1.0f;
-            spotLight2.outerCutoff = 0.75f;
-            spotLight2.radius = 1.0f;
-            spotLight2.numShadowSamples = 2;
-
-            m_lightManager = LightManager(std::vector<DirectionalLight>{dirLight}, std::vector<PointLight>{pointLight, pointLight2}, std::vector<SpotLight>{spotLight, spotLight2});
+            m_lightManager = PBRLightManager(std::vector<PBRDirectionalLight>{dirLight}, std::vector<PBRPointLight>{pointLight}, std::vector<PBRSpotLight>{spotLight});
 
             
             // create buffers for lights. buffers are persistently mapped //TODO make lightmanager manage the light buffers with functions for access
@@ -1285,16 +1254,16 @@ namespace vg
             {
                 int m_vbOffset = 0;
                 int m_ibOffset = 0;
-                int m_diffTextureID = -1;
-                int m_specTextureID = -1;
+                int m_baseColorTextureID = -1;
+                int m_metallicRoughnessTextureID = -1;
             };
 
             std::vector<OffsetInfo> offsetInfos;
             int32_t indexOffset0 = 0;
             int j = 0;
-            for (const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
+            for (const PerMeshInfoPBR& meshInfo : m_scene.getDrawCommandData())
             {
-                offsetInfos.push_back(OffsetInfo{ meshInfo.vertexOffset, indexOffset0, meshInfo.texIndex, meshInfo.texSpecIndex });
+                offsetInfos.push_back(OffsetInfo{ meshInfo.vertexOffset, indexOffset0, meshInfo.texIndexBaseColor, meshInfo.texIndexMetallicRoughness });
                 indexOffset0 += meshInfo.indexCount;
 
                 j++;
@@ -1316,7 +1285,7 @@ namespace vg
             // currently: 1 geometry = 1 mesh
             size_t c = 0;
             uint64_t indexOffset = 0;
-            for (const PerMeshInfo& meshInfo : m_scene.getDrawCommandData())
+            for (const PerMeshInfoPBR& meshInfo : m_scene.getDrawCommandData())
             {
 
                 uint32_t vertexCount = 0;
@@ -1338,7 +1307,7 @@ namespace vg
                 triangles.indexCount = meshInfo.indexCount;
                 triangles.indexType = vk::IndexType::eUint32;
                 triangles.transformData = nullptr;// m_transformBufferInfo.m_Buffer;
-                triangles.transformOffset = 0;// i * sizeof(glm::mat4x3);
+                triangles.transformOffset = 0;// c * sizeof(glm::mat4x3);
 
                 indexOffset += meshInfo.indexCount;
 
@@ -1513,7 +1482,7 @@ namespace vg
 
             //// 2. Create Pipeline
 
-            const auto rgenShaderCode = Utility::readFile("combined/softshadow.rgen.spv");
+            const auto rgenShaderCode = Utility::readFile("combined/softshadowPBR.rgen.spv");
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 
             const auto ahitShaderCode = Utility::readFile("combined/softshadow.rahit.spv");
@@ -1744,7 +1713,9 @@ namespace vg
 			// GBuffer
 			vk::DescriptorSetLayoutBinding gbufferPos(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
 			vk::DescriptorSetLayoutBinding gbufferNormal(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-			// add. info
+            vk::DescriptorSetLayoutBinding gbufferUV(12, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+
+            // add. info
         	vk::DescriptorSetLayoutBinding randomImageLB(3, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
 			vk::DescriptorSetLayoutBinding rtPerFrame(4, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 			//output image
@@ -1757,9 +1728,9 @@ namespace vg
 			vk::DescriptorSetLayoutBinding materialBufferLB(9, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 			vk::DescriptorSetLayoutBinding indirectDrawBufferLB(10, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 
-        	vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(11, vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImages.size()), vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+        	vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(11, vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImages.size()), vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 
-			std::array bindings = { asLB, gbufferPos, gbufferNormal, randomImageLB, rtPerFrame,reflectionImageLB,
+			std::array bindings = { asLB, gbufferPos, gbufferNormal,gbufferUV, randomImageLB, rtPerFrame,reflectionImageLB,
 			vertexBufferLB,indexBufferLB, offsetBufferLB, materialBufferLB, indirectDrawBufferLB, allTexturesLayoutBinding };
 
 			vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
@@ -1768,10 +1739,10 @@ namespace vg
 
 			//// 2. Create Pipeline
 
-			const auto rgenShaderCode = Utility::readFile("combined/rtreflections.rgen.spv");
+			const auto rgenShaderCode = Utility::readFile("combined/rtreflectionsPBR.rgen.spv");
 			const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 			
-			const auto chitShaderCode = Utility::readFile("combined/rtreflections.rchit.spv");
+			const auto chitShaderCode = Utility::readFile("combined/rtreflectionsPBR.rchit.spv");
 			const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
 
 			const auto missShaderCode = Utility::readFile("combined/rtreflections.rmiss.spv");
@@ -1872,6 +1843,9 @@ namespace vg
 				vk::DescriptorImageInfo descriptorGBufferNormalImageInfo(m_gbufferNormalSamplers.at(i), m_gbufferNormalImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
 				vk::WriteDescriptorSet gbufferNormalImageWrite(m_rtReflectionsDescriptorSets.at(i), 2, 0, 1, vk::DescriptorType::eCombinedImageSampler, &descriptorGBufferNormalImageInfo, nullptr, nullptr);
 
+                vk::DescriptorImageInfo descriptorGBufferUVImageInfo(m_gbufferUVSamplers.at(i), m_gbufferUVImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
+                vk::WriteDescriptorSet gbufferUVImageWrite(m_rtReflectionsDescriptorSets.at(i), 12, 0, 1, vk::DescriptorType::eCombinedImageSampler, &descriptorGBufferUVImageInfo, nullptr, nullptr);
+
 				
 				vk::DescriptorImageInfo randomImageInfo(nullptr, m_randomImageViews.at(i), vk::ImageLayout::eGeneral);
 				vk::WriteDescriptorSet randomImageWrite(m_rtReflectionsDescriptorSets.at(i), 3, 0, 1, vk::DescriptorType::eStorageImage, &randomImageInfo, nullptr, nullptr);
@@ -1899,7 +1873,7 @@ namespace vg
 
 				vk::WriteDescriptorSet descWriteAllImages(m_rtReflectionsDescriptorSets.at(i), 11, 0, static_cast<uint32_t>(m_allImages.size()), vk::DescriptorType::eCombinedImageSampler, allImageInfos.data(), nullptr, nullptr);
 
-				std::array descriptorWrites = { accelerationStructureWrite,gbufferPosImageWrite, gbufferNormalImageWrite, randomImageWrite,
+				std::array descriptorWrites = { accelerationStructureWrite,gbufferPosImageWrite, gbufferNormalImageWrite,gbufferUVImageWrite, randomImageWrite,
 					rtPerFrameWrite , reflectionImageWrite, descWriteVertexBuffer, descWriteIndexBuffer, descWriteOffsetBuffer,
 					descWriteMaterialBuffer, descWriteIndirectBuffer, descWriteAllImages};
 				m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
@@ -2473,7 +2447,7 @@ namespace vg
         glm::mat4 m_projection;
         bool m_projectionChanged;
 
-        Scene m_scene;
+        PBRScene m_scene;
 
         Timer m_timer;
 
@@ -2530,7 +2504,7 @@ namespace vg
         std::vector<BufferInfo> m_lightBufferInfos;
         vk::DescriptorSetLayout m_lightDescriptorSetLayout;
         vk::DescriptorSet m_lightDescriptorSet;
-        LightManager m_lightManager;
+        PBRLightManager m_lightManager;
 
         // Sync Objects
 
@@ -2540,6 +2514,7 @@ namespace vg
         BufferInfo m_instanceBufferInfo;
         BufferInfo m_scratchBuffer;
         BufferInfo m_offsetBufferInfo;
+        BufferInfo m_transformBufferInfo;
 
         std::vector<ImageInfo> m_randomImageInfos;
         std::vector<vk::ImageView> m_randomImageViews;

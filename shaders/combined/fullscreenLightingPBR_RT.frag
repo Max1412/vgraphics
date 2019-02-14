@@ -53,6 +53,12 @@ layout (push_constant) uniform perFramePush
 
 #include "pbrLight.glsl"
 
+layout(set = 2, binding = 0) uniform sampler2DArray shadowDirectionalImage;
+layout(set = 2, binding = 1) uniform sampler2DArray shadowPointImage;
+layout(set = 2, binding = 2) uniform sampler2DArray shadowSpotImage;
+layout(set = 2, binding = 3) uniform sampler2D rtaoImage;
+layout(set = 2, binding = 4) uniform sampler2D reflectionImage;
+
 void main() 
 {
     vec4 posAndID = texture(gbufferPositionSampler, inUV);
@@ -84,6 +90,9 @@ void main()
 
     float metallic = metallicRoughness.x;
     float roughness = metallicRoughness.y + 0.01;
+        
+    ///////////// AO
+    float ao = texture(rtaoImage, inUV).x;
 
     // viewing vector
     vec3 V = normalize(matrices.cameraPos.xyz - WorldPos);
@@ -92,9 +101,10 @@ void main()
     vec3 R = reflect(-V, N);
                
     vec3 Lo = vec3(0.0);
-
     for(int i = 0; i < dirLights.length(); ++i) 
     {
+        float dirShadow = texture(shadowDirectionalImage, vec3(inUV, i)).x;
+
         // get light parameters
         PBRDirectionalLight currentLight = dirLights[i];
 
@@ -123,11 +133,13 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * dirShadow; 
     }   
 
     for(int i = 0; i < pointLights.length(); ++i) 
     {
+        float pointShadow = texture(shadowPointImage, vec3(inUV, i)).x;
+
         // get light parameters
         PBRPointLight currentLight = pointLights[i];
 
@@ -158,11 +170,13 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * pointShadow; 
     }
 
     for(int i = 0; i < spotLights.length(); ++i) 
     {
+        float spotShadow = texture(shadowSpotImage, vec3(inUV, i)).x;
+
         // get light parameters
         PBRSpotLight currentLight = spotLights[i];
 
@@ -198,12 +212,15 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * spotShadow; 
     }
 
-    float ao = 1.0f;
     vec3 ambient = vec3(0.03) * albedo * ao;
     vec3 color = ambient + Lo;
+
+    vec3 reflectionColor = texture(reflectionImage, inUV).xyz;
+    color += reflectionColor;
+
 
     // ////////////// TONEMAPPING
     // const float exposure = 1.0f;

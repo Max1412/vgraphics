@@ -1,5 +1,6 @@
 #version 460
 #extension GL_NV_ray_tracing : require
+const float PI = 3.1415926535;
 
 layout(location = 0) rayPayloadNV uint hitValue;
 
@@ -18,9 +19,9 @@ layout(set = 2, binding = 0, r32f) uniform image2DArray softShadowDirectionalIma
 layout(set = 2, binding = 1, r32f) uniform image2DArray softShadowPointImage;
 layout(set = 2, binding = 2, r32f) uniform image2DArray softShadowSpotImage;
 
-#include "light.glsl"
 #include "random.glsl"
 #include "samplePointGen.glsl"
+#include "pbrLight.glsl"
 
 
 void main() 
@@ -43,7 +44,7 @@ void main()
     {
         float dirShadowValue = 0.0f;
 
-        DirectionalLight currentLight = dirLights[i];
+        PBRDirectionalLight currentLight = dirLights[i];
 
         for(int j = 0; j < currentLight.numShadowSamples; j++)
         {            
@@ -72,7 +73,7 @@ void main()
     {
         float pointShadowValue = 0.0f;
 
-        PointLight currentLight = pointLights[i];
+        PBRPointLight currentLight = pointLights[i];
 
         //TODO tmax should also not be greater than the "radius of the influence sphere" of the point light
         for(int j = 0; j < currentLight.numShadowSamples; j++)
@@ -105,7 +106,7 @@ void main()
     {
         float spotShadowValue = 0.0f;
 
-        SpotLight currentLight = spotLights[i];
+        PBRSpotLight currentLight = spotLights[i];
 
         for(int j = 0; j < currentLight.numShadowSamples; j++)
         {            

@@ -1,5 +1,3 @@
-const float PI = 3.1415926535;
-
 vec3 generatePointOnSphericalLight(in vec3 position, in float radius)
 {
     float theta = rand() * 2.0f * PI;
