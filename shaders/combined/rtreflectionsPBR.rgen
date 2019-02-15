@@ -85,6 +85,8 @@ vec3 ggx_importance_hemisphere(const in vec2 importance_sample)
     return vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
 }
 
+#include "samplePointGen.glsl"
+
 void main()
 {
     //TODO get mesh ID (from gbuffer) to get material ID
@@ -120,7 +122,7 @@ void main()
     else
         roughness = currentMaterial.roughness;
 
-    vec3 direction = ggx_importance_hemisphere(ggx_importance_sample(vec2(rand(), rand()), roughness));
+    vec3 direction = rotateToNormal(ggx_importance_hemisphere(ggx_importance_sample(vec2(rand(), rand()), roughness)), normal);
 
     traceNV(topLevelAS, rayFlags, cullMask,
         0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
