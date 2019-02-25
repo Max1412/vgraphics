@@ -100,8 +100,10 @@ namespace vg
 
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_scratchBuffer.m_Buffer), m_scratchBuffer.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_instanceBufferInfo.m_Buffer), m_instanceBufferInfo.m_BufferAllocation);
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_offsetBufferInfo.m_Buffer), m_offsetBufferInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_rtSoftShadowSBTInfo.m_Buffer), m_rtSoftShadowSBTInfo.m_BufferAllocation);
             vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_rtAOSBTInfo.m_Buffer), m_rtAOSBTInfo.m_BufferAllocation);
+            vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(m_rtReflectionsSBTInfo.m_Buffer), m_rtReflectionsSBTInfo.m_BufferAllocation);
 
 
             m_context.getDevice().destroyAccelerationStructureNV(m_topAS.m_AS);
@@ -118,6 +120,9 @@ namespace vg
 
             m_context.getDevice().destroyPipeline(m_rtAOPipeline);
             m_context.getDevice().destroyPipelineLayout(m_rtAOPipelineLayout);
+
+            m_context.getDevice().destroyPipeline(m_rtReflectionsPipeline);
+            m_context.getDevice().destroyPipelineLayout(m_rtReflectionsPipelineLayout);
 
             for(const auto& buffer : m_lightBufferInfos)
                 vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(buffer.m_Buffer), buffer.m_BufferAllocation);
@@ -206,6 +211,13 @@ namespace vg
             for (const auto& sampler : m_rtAOImageSamplers)
                 m_context.getDevice().destroySampler(sampler);
 
+            for (const auto& image : m_rtReflectionImageInfos)
+                vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
+            for (const auto& view : m_rtReflectionImageViews)
+                m_context.getDevice().destroyImageView(view);
+            for (const auto& sampler : m_rtReflectionImageSamplers)
+                m_context.getDevice().destroySampler(sampler);
+
             for (const auto& image : m_randomImageInfos)
                 vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
 
@@ -222,7 +234,7 @@ namespace vg
             m_context.getDevice().destroyDescriptorSetLayout(m_shadowImageStoreDescriptorSetLayout);
             m_context.getDevice().destroyDescriptorSetLayout(m_rtAOImageStoreDescriptorSetLayout);
             m_context.getDevice().destroyDescriptorSetLayout(m_rtAODescriptorSetLayout);
-
+            m_context.getDevice().destroyDescriptorSetLayout(m_rtReflectionsDescriptorSetLayout);
 
             m_context.getDevice().destroyPipeline(m_gbufferGraphicsPipeline);
             m_context.getDevice().destroyPipelineLayout(m_gbufferPipelineLayout);
@@ -783,7 +795,7 @@ namespace vg
                     0.0f, true, 16.0f, false, vk::CompareOp::eAlways, 0.0f, static_cast<float>(imageInfo.mipLevels), vk::BorderColor::eIntOpaqueBlack, false
                 );
                 m_allImageSamplers.push_back(m_context.getDevice().createSampler(samplerInfo));
-
+                
             }
 
             m_context.getLogger()->info("Texture loading complete.");
@@ -2087,6 +2099,18 @@ namespace vg
                     m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
                 );
 
+                //vk::ImageMemoryBarrier barrierRandomImage(
+                //    vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite,
+                //    vk::ImageLayout::eGeneral, vk::ImageLayout::eGeneral,
+                //    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                //    m_randomImageInfos.at(i).m_Image,
+                //    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
+                //);
+                //m_rtSoftShadowsSecondaryCommandBuffers.at(i).pipelineBarrier(
+                //    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                //    vk::DependencyFlagBits::eByRegion, {}, {}, { barrierRandomImage }
+                //);
+
 
                 // transition image to read it in the fullscreen lighting shader
                 vk::ImageMemoryBarrier barrierPointShadowTOFS(
@@ -2139,6 +2163,11 @@ namespace vg
                     m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
                 );
 
+                //m_rtAOSecondaryCommandBuffers.at(i).pipelineBarrier(
+                //    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                //    vk::DependencyFlagBits::eByRegion, {}, {}, { barrierRandomImage }
+                //);
+
                 // transition image to read it in the fullscreen lighting shader
                 vk::ImageMemoryBarrier barrierAOTOFS(
                     vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
@@ -2185,6 +2214,11 @@ namespace vg
 					nullptr, 0, 0, // callable
 					m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
 				);
+
+                //m_rtReflectionsSecondaryCommandBuffers.at(i).pipelineBarrier(
+                //    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                //    vk::DependencyFlagBits::eByRegion, {}, {}, { barrierRandomImage }
+                //);
 
 				// transition image to read it in the fullscreen lighting shader
 				vk::ImageMemoryBarrier barrierReflTOFS(
@@ -2514,7 +2548,7 @@ namespace vg
         BufferInfo m_instanceBufferInfo;
         BufferInfo m_scratchBuffer;
         BufferInfo m_offsetBufferInfo;
-        BufferInfo m_transformBufferInfo;
+        //BufferInfo m_transformBufferInfo;
 
         std::vector<ImageInfo> m_randomImageInfos;
         std::vector<vk::ImageView> m_randomImageViews;
