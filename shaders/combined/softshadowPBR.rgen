@@ -49,7 +49,7 @@ void main()
         for(int j = 0; j < currentLight.numShadowSamples; j++)
         {            
             //todo jitter direction better. this converges really slowly
-            vec3 direction = normalize(-(currentLight.direction + 0.0025 * vec3(rand(), rand(), rand())));
+            vec3 direction = normalize(-(currentLight.direction + 0.05 * vec3(rand(), rand(), rand())));
 
 
             traceNV(topLevelAS, rayFlags, cullMask,

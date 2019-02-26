@@ -111,13 +111,13 @@ void main()
 
     PerMeshInfoPBR currentMeshInfo = perMeshInfos.perMesh[gl_InstanceCustomIndexNV];
     MaterialInfoPBR material = materials[currentMeshInfo.assimpMaterialIndex];
-
+    //todo use "correct" mixed f0
     
     vec3 albedo = vec3(0.0f);
     if(currentMeshInfo.texIndexBaseColor != -1)
         albedo = texture(allTextures[currentMeshInfo.texIndexBaseColor], uv).xyz;
     else
-        albedo = material.baseColor;;
+        albedo = material.baseColor;
 
     vec3 metallicRoughness = vec3(0.0f);
     if(currentMeshInfo.texIndexMetallicRoughness != -1)
@@ -133,6 +133,9 @@ void main()
 
     // reflection vector
     vec3 R = reflect(-V, N);
+
+    vec3 F0 = vec3(0.04); 
+    F0 = mix(F0, albedo, metallic);
                
     vec3 Lo = vec3(0.0);
     for(int i = 0; i < dirLights.length(); ++i) //TODO cull shadow rays/don't calculate rest if ray didnt hit
@@ -158,7 +161,7 @@ void main()
         // calculate the parts of the Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);        
         float G   = GeometrySmith(N, V, L, roughness);      
-        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), material.f0);       
+        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);       
         
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
@@ -199,7 +202,7 @@ void main()
         // calculate the parts of the Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);        
         float G   = GeometrySmith(N, V, L, roughness);      
-        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), material.f0);       
+        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);       
         
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
@@ -246,7 +249,7 @@ void main()
         // calculate the parts of the Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);        
         float G   = GeometrySmith(N, V, L, roughness);      
-        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), material.f0);       
+        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);       
         
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;

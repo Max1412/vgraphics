@@ -75,6 +75,7 @@ void main()
     vec4 uvLOD = texture(gbufferUVSampler, inUV);
 
     MaterialInfoPBR material = materials[currentMeshInfo.assimpMaterialIndex];
+    //todo use "correct" mixed f0
 
     vec3 albedo = vec3(0.0f);
     if(currentMeshInfo.texIndexBaseColor != -1)
@@ -99,7 +100,11 @@ void main()
 
     // reflection vector
     vec3 R = reflect(-V, N);
-               
+
+    vec3 F0 = vec3(0.04); 
+    F0 = mix(F0, albedo, metallic);
+    //F0 = material.f0;
+
     vec3 Lo = vec3(0.0);
     for(int i = 0; i < dirLights.length(); ++i) 
     {
@@ -120,7 +125,7 @@ void main()
         // calculate the parts of the Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);        
         float G   = GeometrySmith(N, V, L, roughness);      
-        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), material.f0);       
+        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);       
         
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
@@ -157,7 +162,7 @@ void main()
         // calculate the parts of the Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);        
         float G   = GeometrySmith(N, V, L, roughness);      
-        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), material.f0);       
+        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);       
         
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
@@ -199,7 +204,7 @@ void main()
         // calculate the parts of the Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);        
         float G   = GeometrySmith(N, V, L, roughness);      
-        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), material.f0);       
+        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);       
         
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
@@ -219,7 +224,7 @@ void main()
     vec3 color = ambient + Lo;
 
     vec3 reflectionColor = texture(reflectionImage, inUV).xyz;
-    color += reflectionColor;
+    color += reflectionColor; //TODO mix/multiply by fresnel
 
 
     // ////////////// TONEMAPPING
@@ -236,7 +241,5 @@ void main()
     color = pow(color, vec3(1.0/2.2));  
   
     outColor = vec4(color, 1.0f);
-
-    //outColor = vec4(reflectionColor, 1.0f);
 
 }
