@@ -58,6 +58,8 @@ layout(set = 2, binding = 1) uniform sampler2DArray shadowPointImage;
 layout(set = 2, binding = 2) uniform sampler2DArray shadowSpotImage;
 layout(set = 2, binding = 3) uniform sampler2D rtaoImage;
 layout(set = 2, binding = 4) uniform sampler2D reflectionImage;
+   
+const float exposure = 3.0f;
 
 void main() 
 {
@@ -66,8 +68,14 @@ void main()
     int drawID = int(posAndID.w);
 
     // ID -1 means no geometry (background)
-    if (drawID == -1) discard;
-
+    if (drawID == -1)
+    {
+        vec3 color = vec3(0.007, 0.007, 0.01);
+        color = vec3(1.0) - exp(-color * exposure);
+        color = pow(color, vec3(1.0/2.2));  
+        outColor = vec4(color, 1.0f);
+        return;
+    }
     // normal in world space
     vec3 N = normalize(texture(gbufferNormalSampler, inUV).xyz); 
 
@@ -82,6 +90,7 @@ void main()
         albedo = textureLod(allTextures[currentMeshInfo.texIndexBaseColor], uvLOD.xy, uvLOD.w).xyz;
     else
         albedo = material.baseColor;
+    albedo = pow(albedo, vec3(2.2));
 
     vec3 metallicRoughness = vec3(0.0f);
     if(currentMeshInfo.texIndexMetallicRoughness != -1)
@@ -220,26 +229,35 @@ void main()
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * spotShadow; 
     }
 
-    vec3 ambient = vec3(0.03) * albedo * ao;
-    vec3 color = ambient + Lo;
+    vec3 F = fresnelSchlickRoughness(max(dot(V, N), 0.0f), F0, roughness);
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - metallic;
 
     vec3 reflectionColor = texture(reflectionImage, inUV).xyz;
-    color += reflectionColor; //TODO mix/multiply by fresnel
+    vec3 backgroundAmbient = vec3(0.003f);
+    vec3 color = (backgroundAmbient * albedo * kD * ao + reflectionColor) + Lo;
+
+    //vec3 ambient = vec3(0.03) * albedo * ao * (1.0 - metallic);
+    //vec3 color = ambient + Lo;
+
+    //color += reflectionColor; //TODO mix/multiply by fresnel
 
 
     // ////////////// TONEMAPPING
-    // const float exposure = 1.0f;
     // const float gamma = 2.2f;
     
     // // R E I N H A R D
     // // Exposure tone mapping
-    // vec3 mapped = vec3(1.0) - exp(-color * exposure);
+    color = vec3(1.0) - exp(-color * exposure);
     // // Gamma correction 
     // mapped = pow(mapped, vec3(1.0 / gamma));
 
-    color = color / (color + vec3(1.0));
+    //color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));  
   
     outColor = vec4(color, 1.0f);
+
+    //outColor = vec4(albedo, 1.0f);
 
 }

@@ -118,6 +118,7 @@ void main()
         albedo = texture(allTextures[currentMeshInfo.texIndexBaseColor], uv).xyz;
     else
         albedo = material.baseColor;
+    albedo = pow(albedo, vec3(2.2));
 
     vec3 metallicRoughness = vec3(0.0f);
     if(currentMeshInfo.texIndexMetallicRoughness != -1)
@@ -265,8 +266,13 @@ void main()
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
     }
 
-    vec3 ambient = vec3(0.03) * albedo; // no AO here
-    vec3 color = ambient + Lo;
+    vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0f), F0, roughness);
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - metallic;
+
+    vec3 backgroundAmbient = vec3(0.003f);
+    vec3 color = (backgroundAmbient * albedo * kD) + Lo;
 
     hitValue = color;
 
