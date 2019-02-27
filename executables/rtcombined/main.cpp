@@ -2372,26 +2372,41 @@ namespace vg
                 {
                     if (ImGui::Button("Reload: g-buffer"))
                     {
+                        m_context.getGraphicsQueue().waitIdle();
+                        m_context.getDevice().destroyPipeline(m_gbufferGraphicsPipeline);
+                        m_context.getDevice().destroyPipelineLayout(m_gbufferPipelineLayout);
                         createGBufferPipeline();
                         createAllCommandBuffers();
                     }
                     if (ImGui::Button("Reload: fullscreen lighting"))
                     {
+                        m_context.getGraphicsQueue().waitIdle();
+                        m_context.getDevice().destroyPipeline(m_fullscreenLightingPipeline);
+                        m_context.getDevice().destroyPipelineLayout(m_fullscreenLightingPipelineLayout);
                         createFullscreenLightingPipeline();
                         createAllCommandBuffers();
                     }
                     if (ImGui::Button("Reload: soft shadows (rt)"))
                     {
+                        m_context.getGraphicsQueue().waitIdle();
+                        m_context.getDevice().destroyPipeline(m_rtSoftShadowsPipeline);
+                        m_context.getDevice().destroyPipelineLayout(m_rtSoftShadowsPipelineLayout);
                         createRTSoftShadowsPipeline();
                         createAllCommandBuffers();
                     }
                     if (ImGui::Button("Reload: ambient occlusion (rt)"))
                     {
+                        m_context.getGraphicsQueue().waitIdle();
+                        m_context.getDevice().destroyPipeline(m_rtAOPipeline);
+                        m_context.getDevice().destroyPipelineLayout(m_rtAOPipelineLayout);
                         createRTAOPipeline();
                         createAllCommandBuffers();
                     }
 					if (ImGui::Button("Reload: reflections (rt)"))
 					{
+                        m_context.getGraphicsQueue().waitIdle();
+                        m_context.getDevice().destroyPipeline(m_rtReflectionsPipeline);
+                        m_context.getDevice().destroyPipelineLayout(m_rtReflectionsPipelineLayout);
 						createRTReflectionPipeline();
 						createAllCommandBuffers();
 					}
