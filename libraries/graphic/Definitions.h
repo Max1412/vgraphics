@@ -33,6 +33,7 @@ namespace vg
 		int32_t frameSampleCount = 0;
 		float RTAORadius = 100.0f;
 		int32_t RTAOSampleCount = 4;
+		int32_t RTReflectionSampleCount = 4;
 	};
 
     struct ImageLoadInfo

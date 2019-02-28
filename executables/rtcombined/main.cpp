@@ -2322,6 +2322,7 @@ namespace vg
 			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3), vk::ArrayProxy<const int32_t>{ m_sampleCounts.at(currentImage) });
 			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3) + sizeof(int32_t), vk::ArrayProxy<const float>{ m_RTAORadius });
 			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3) + sizeof(int32_t) + sizeof(float), vk::ArrayProxy<const int32_t>{ m_numAOSamples });
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3) + sizeof(int32_t) + sizeof(float) + sizeof(int32_t), vk::ArrayProxy<const int32_t>{ m_numRTReflectionSamples });
 
             m_sampleCounts.at(currentImage)++;
 
@@ -2423,6 +2424,8 @@ namespace vg
                     ImGui::Checkbox("Accumulate Samples", &m_accumulateRTSamples);
                     ImGui::SliderFloat("RTAO Radius", &m_RTAORadius, 0.1f, 100.0f);
                     ImGui::SliderInt("RTAO Samples", &m_numAOSamples, 1, 64);
+					ImGui::SliderInt("RT Reflection Samples", &m_numRTReflectionSamples, 1, 64);
+
                     ImGui::EndMenu();
                 }
 				if (ImGui::BeginMenu("Lighting"))
@@ -2584,6 +2587,7 @@ namespace vg
         std::vector<BufferInfo> m_rtPerFrameInfoBufferInfos;
         int32_t m_numAOSamples = 4;
         float m_RTAORadius = 100.0f;
+		int32_t m_numRTReflectionSamples = 4;
 
         // soft shadow stuff
         vk::DescriptorSetLayout m_rtSoftShadowsDescriptorSetLayout;
