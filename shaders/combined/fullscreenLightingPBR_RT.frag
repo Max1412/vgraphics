@@ -49,6 +49,7 @@ layout (push_constant) uniform perFramePush
     mat4 view;
     mat4 proj;
     vec4 cameraPos;
+    float exposure;
 } matrices;
 
 #include "pbrLight.glsl"
@@ -59,7 +60,6 @@ layout(set = 2, binding = 2) uniform sampler2DArray shadowSpotImage;
 layout(set = 2, binding = 3) uniform sampler2D rtaoImage;
 layout(set = 2, binding = 4) uniform sampler2D reflectionImage;
    
-const float exposure = 3.0f;
 
 void main() 
 {
@@ -71,7 +71,7 @@ void main()
     if (drawID == -1)
     {
         vec3 color = vec3(0.007, 0.007, 0.01);
-        color = vec3(1.0) - exp(-color * exposure);
+        color = vec3(1.0) - exp(-color * matrices.exposure);
         color = pow(color, vec3(1.0/2.2));  
         outColor = vec4(color, 1.0f);
         return;
@@ -249,7 +249,7 @@ void main()
     
     // // R E I N H A R D
     // // Exposure tone mapping
-    color = vec3(1.0) - exp(-color * exposure);
+    color = vec3(1.0) - exp(-color * matrices.exposure);
     // // Gamma correction 
     // mapped = pow(mapped, vec3(1.0 / gamma));
 

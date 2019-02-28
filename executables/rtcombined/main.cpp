@@ -357,7 +357,7 @@ namespace vg
             vk::WriteDescriptorSet descWritePerMeshInfo(m_gbufferDescriptorSets.at(0), 2, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &perMeshInformationIndirectDrawSSBOInfo, nullptr);
 
             std::vector<vk::DescriptorImageInfo> allImageInfos;
-            for (int i = 0; i < m_allImages.size(); i++)
+            for (size_t i = 0; i < m_allImages.size(); i++)
             {
                 allImageInfos.emplace_back(m_allImageSamplers.at(i), m_allImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
             }
@@ -424,7 +424,7 @@ namespace vg
 
             // push view & proj matrix
             std::array vpcr = {
-                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4)}
+                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4) + sizeof(float)}
             };
 
             vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, 1, &m_gbufferDescriptorSetLayout, static_cast<uint32_t>(vpcr.size()), vpcr.data());
@@ -650,7 +650,7 @@ namespace vg
 
             // push view & proj matrix
             std::array vpcr = {
-                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4)}
+                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4) + sizeof(float)}
             };
 
             std::array dsls = { m_fullScreenLightingDescriptorSetLayout, m_lightDescriptorSetLayout, m_allRTImageSampleDescriptorSetLayout };
@@ -714,7 +714,7 @@ namespace vg
 
 
             std::vector<vk::DescriptorImageInfo> allImageInfos;
-            for (int i = 0; i < m_allImages.size(); i++)
+            for (size_t i = 0; i < m_allImages.size(); i++)
             {
                 allImageInfos.emplace_back(m_allImageSamplers.at(i), m_allImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
             }
@@ -808,14 +808,14 @@ namespace vg
             dirLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
 
             PBRPointLight pointLight;
-            pointLight.position = glm::vec3(0.0f, 10.0f, 0.0f);
-            pointLight.intensity = glm::vec3(10.0f);
-            pointLight.radius = 1.0f;
+            pointLight.position = glm::vec3(43.0f, 100.0f, -17.0f);
+            pointLight.intensity = glm::vec3(8000.0f);
+            pointLight.radius = 5.0f;
 
             PBRSpotLight spotLight;
             spotLight.position = glm::vec3(3.0f, 10.0f, 3.0f);
             spotLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-            spotLight.intensity = glm::vec3(100.0f);
+            spotLight.intensity = glm::vec3(0.0f);
             spotLight.cutoff = 1.0f;
             spotLight.outerCutoff = 0.75f;
             spotLight.radius = 1.0f;
@@ -1247,7 +1247,7 @@ namespace vg
 
             m_sampleCounts = std::vector<int32_t>(m_swapChainFramebuffers.size(), 0);
             std::vector<RTperFrameInfoCombined> initdata(1);
-            for(int i = 0; i < m_swapChainFramebuffers.size(); i++)
+            for(size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
                 m_rtPerFrameInfoBufferInfos.push_back(fillBufferTroughStagedTransfer(initdata, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst));
         }
 
@@ -1458,7 +1458,7 @@ namespace vg
             //todo remove this when the SDK update happened
             auto OwnCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdBuildAccelerationStructureNV"));
 
-            for (int i = 0; i < geometryVec.size(); i++)
+            for (size_t i = 0; i < geometryVec.size(); i++)
             {
                 vk::AccelerationStructureInfoNV asInfoBot(vk::AccelerationStructureTypeNV::eBottomLevel, {}, 0, 1, &geometryVec.at(i));
                 OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoBot), nullptr, 0, VK_FALSE, m_bottomASs.at(i).m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
@@ -1837,7 +1837,7 @@ namespace vg
 
 
 			std::vector<vk::DescriptorImageInfo> allImageInfos;
-			for (int i = 0; i < m_allImages.size(); i++)
+			for (size_t i = 0; i < m_allImages.size(); i++)
 			{
 				allImageInfos.emplace_back(m_allImageSamplers.at(i), m_allImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
 			}
@@ -2268,6 +2268,11 @@ namespace vg
                 2*sizeof(glm::mat4), sizeof(glm::vec4),
                 &cameraPos);
 
+			m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_fullscreenLightingPipelineLayout,
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+				2 * sizeof(glm::mat4) + sizeof(glm::vec4), sizeof(float),
+				&m_exposure);
+
             m_perFrameSecondaryCommandBuffers.at(currentImage).end();
 
 
@@ -2420,6 +2425,11 @@ namespace vg
                     ImGui::SliderInt("RTAO Samples", &m_numAOSamples, 1, 64);
                     ImGui::EndMenu();
                 }
+				if (ImGui::BeginMenu("Lighting"))
+				{
+					ImGui::SliderFloat("Exposure", &m_exposure, 0.1f, 100.0f);
+					ImGui::EndMenu();
+				}
                 if(m_imguiShowDemoWindow) ImGui::ShowDemoWindow();
 
                 m_timer.drawGUI();
@@ -2554,6 +2564,8 @@ namespace vg
         vk::DescriptorSetLayout m_lightDescriptorSetLayout;
         vk::DescriptorSet m_lightDescriptorSet;
         PBRLightManager m_lightManager;
+
+		float m_exposure = 8.0f;
 
         // Sync Objects
 
