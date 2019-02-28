@@ -2318,11 +2318,11 @@ namespace vg
             }
 
 			glm::vec3 camPos = m_camera.getPosition();
-			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, 0, vk::ArrayProxy<const glm::vec3>{ camPos });
-			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3), vk::ArrayProxy<const int32_t>{ m_sampleCounts.at(currentImage) });
-			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3) + sizeof(int32_t), vk::ArrayProxy<const float>{ m_RTAORadius });
-			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3) + sizeof(int32_t) + sizeof(float), vk::ArrayProxy<const int32_t>{ m_numAOSamples });
-			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, sizeof(glm::vec3) + sizeof(int32_t) + sizeof(float) + sizeof(int32_t), vk::ArrayProxy<const int32_t>{ m_numRTReflectionSamples });
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, cameraPosWorld), vk::ArrayProxy<const glm::vec3>{ camPos });
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, frameSampleCount), vk::ArrayProxy<const int32_t>{ m_sampleCounts.at(currentImage) });
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTAORadius), vk::ArrayProxy<const float>{ m_RTAORadius });
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTAOSampleCount), vk::ArrayProxy<const int32_t>{ m_numAOSamples });
+			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTReflectionSampleCount), vk::ArrayProxy<const int32_t>{ m_numRTReflectionSamples });
 
             m_sampleCounts.at(currentImage)++;
 
