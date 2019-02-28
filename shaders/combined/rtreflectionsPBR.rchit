@@ -11,13 +11,7 @@ layout(location = 1) rayPayloadNV int rtSecondaryShadow;
 layout(constant_id = 0) const int NUM_TEXTURES = 64;
 layout(set = 0, binding = 11) uniform sampler2D allTextures[NUM_TEXTURES];
 
-struct VertexInfo
-{
-    vec3 pos;
-    vec2 uv;
-    vec3 normal;
-};
-
+#include "structs.glsl"
 layout(std430, set = 0, binding = 6) readonly buffer vertexBuffer
 {
     VertexInfo vertices[];
@@ -29,45 +23,15 @@ layout(std430, set = 0, binding = 7) readonly buffer indexBuffer
 } indexInfos;
 
 
-struct OffsetInfo
-{
-    int m_vbOffset;
-    int m_ibOffset;
-    int m_diffTextureID;
-    int m_specTextureID;
-};
-
 layout(std430, set = 0, binding = 8) readonly buffer offsetBuffer
 {
     OffsetInfo offsets[];
 } offsetInfos;
 
 
-struct MaterialInfoPBR
-{
-	vec3 baseColor;
-	float roughness;
-	vec3 f0;
-	float metalness;
-};
-
 layout(set = 0, binding = 9) readonly buffer materialBuffer
 {
     MaterialInfoPBR materials[];
-};
-
-struct PerMeshInfoPBR
-{
-    // standard
-    uint    indexCount;
-    uint    instanceCount;
-    uint    firstIndex;
-    int     vertexOffset;
-    uint    firstInstance;
-    // additional
-	int texIndexBaseColor;
-	int texIndexMetallicRoughness;
-    int assimpMaterialIndex;
 };
 
 layout(std430, set = 0, binding = 10) readonly buffer indirectDrawBuffer
@@ -75,7 +39,6 @@ layout(std430, set = 0, binding = 10) readonly buffer indirectDrawBuffer
     PerMeshInfoPBR perMesh[];
 } perMeshInfos;
 
-#include "structs.glsl"
 
 layout(set = 0, binding = 4) readonly buffer rtPerFrameBuffer
 {

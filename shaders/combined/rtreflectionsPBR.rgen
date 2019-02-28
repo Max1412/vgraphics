@@ -22,31 +22,9 @@ layout(set = 0, binding = 4, std430) readonly buffer rtPerFrameBuffer
     RTperFrameInfo2 perFrameInfo;
 };
 
-struct MaterialInfoPBR
-{
-	vec3 baseColor;
-	float roughness;
-	vec3 f0;
-	float metalness;
-};
-
 layout(set = 0, binding = 9) readonly buffer materialBuffer
 {
     MaterialInfoPBR materials[];
-};
-
-struct PerMeshInfoPBR
-{
-    // standard
-    uint    indexCount;
-    uint    instanceCount;
-    uint    firstIndex;
-    int     vertexOffset;
-    uint    firstInstance;
-    // additional
-	int texIndexBaseColor;
-	int texIndexMetallicRoughness;
-    int assimpMaterialIndex;
 };
 
 layout(std430, set = 0, binding = 10) readonly buffer indirectDrawBuffer
