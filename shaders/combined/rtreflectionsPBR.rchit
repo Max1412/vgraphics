@@ -87,9 +87,19 @@ void main()
     if(currentMeshInfo.texIndexMetallicRoughness != -1)
         metallicRoughness = texture(allTextures[currentMeshInfo.texIndexMetallicRoughness], uv).xyz;
     else
-        metallicRoughness = vec3(material.metalness, material.roughness, 0.0f); // what is z?
+    {
+        #ifdef FBX
+        metallicRoughness = vec3(0.0f, material.roughness, material.metalness); // what is z? // FBX
+        #else
+        metallicRoughness = vec3(material.metalness, material.roughness, 0.0f); // what is z? // GLTF
+        #endif
+    }
 
-    float metallic = metallicRoughness.x;
+    #ifdef FBX
+    float metallic = metallicRoughness.z; // FBX
+    #else
+    float metallic = metallicRoughness.x; // GLTF
+    #endif
     float roughness = metallicRoughness.y + 0.01;
 
    // viewing vector
@@ -138,7 +148,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;// * rtSecondaryShadow; 
     }   
 
     for(int i = 0; i < pointLights.length(); ++i) 
@@ -179,7 +189,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;// * rtSecondaryShadow; 
     }
 
     for(int i = 0; i < spotLights.length(); ++i) 
@@ -226,7 +236,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;// * rtSecondaryShadow; 
     }
 
     vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0f), F0, roughness);

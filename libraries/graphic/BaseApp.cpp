@@ -223,8 +223,6 @@ namespace vg
         auto stagingBuffer = createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eExclusive, VMA_ALLOCATION_CREATE_MAPPED_BIT);
         memcpy(stagingBuffer.m_BufferAllocInfo.pMappedData, ili.pixels, static_cast<size_t>(imageSize));
 
-        stbi_image_free(ili.pixels);
-
         using us = vk::ImageUsageFlagBits;
         ImageInfo returnInfo = createImage(ili.texWidth, ili.texHeight, ili.mipLevels, vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
             us::eTransferSrc | us::eTransferDst | us::eSampled, VMA_MEMORY_USAGE_GPU_ONLY);

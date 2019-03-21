@@ -29,6 +29,7 @@
 #include <random>
 #include <execution>
 
+
 namespace vg
 {
 
@@ -39,9 +40,11 @@ namespace vg
     		BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
     		m_camera(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height),
 			m_scene("pica_pica_-_mini_diorama_01/scene.gltf")
+			//m_scene("Bistro/Bistro_Research_Exterior.fbx")
 		{
             createCommandPools();
 			createSceneInformation("pica_pica_-_mini_diorama_01/");
+			//createSceneInformation("Bistro/");
 
             createDepthResources();
 
@@ -795,7 +798,8 @@ namespace vg
                     0.0f, true, 16.0f, false, vk::CompareOp::eAlways, 0.0f, static_cast<float>(imageInfo.mipLevels), vk::BorderColor::eIntOpaqueBlack, false
                 );
                 m_allImageSamplers.push_back(m_context.getDevice().createSampler(samplerInfo));
-                
+
+				stbi_image_free(ili.pixels);                
             }
 
             m_context.getLogger()->info("Texture loading complete.");
@@ -1497,8 +1501,8 @@ namespace vg
             const auto rgenShaderCode = Utility::readFile("combined/softshadowPBR.rgen.spv");
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 
-            const auto ahitShaderCode = Utility::readFile("combined/softshadow.rahit.spv");
-            const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
+            //const auto ahitShaderCode = Utility::readFile("combined/softshadow.rahit.spv");
+            //const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
             const auto chitShaderCode = Utility::readFile("combined/softshadow.rchit.spv");
             const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
@@ -1510,7 +1514,7 @@ namespace vg
             std::array rtShaderStageInfos = {
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
-                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eAnyHitNV, ahitShaderModule, "main"),
+                //vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eAnyHitNV, ahitShaderModule, "main"),
 
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main")
             };
@@ -1525,15 +1529,15 @@ namespace vg
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
                 // group 1: any hit
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
-                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV},
+                //vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV},
                 // group 2: miss
-                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 3, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
             };
 
             vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
                 static_cast<uint32_t>(rtShaderStageInfos.size()), rtShaderStageInfos.data(),
                 static_cast<uint32_t>(shaderGroups.size()), shaderGroups.data(),
-                m_context.getRaytracingProperties().maxRecursionDepth,
+                1,
                 m_rtSoftShadowsPipelineLayout,
                 nullptr, 0
             );
@@ -1542,7 +1546,7 @@ namespace vg
 
             // destroy shader modules:
             m_context.getDevice().destroyShaderModule(rgenShaderModule);
-            m_context.getDevice().destroyShaderModule(ahitShaderModule);
+            //m_context.getDevice().destroyShaderModule(ahitShaderModule);
             m_context.getDevice().destroyShaderModule(chitShaderModule);
             m_context.getDevice().destroyShaderModule(missShaderModule);
 
@@ -1653,7 +1657,7 @@ namespace vg
             vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
                 static_cast<uint32_t>(rtShaderStageInfos.size()), rtShaderStageInfos.data(),
                 static_cast<uint32_t>(shaderGroups.size()), shaderGroups.data(),
-                m_context.getRaytracingProperties().maxRecursionDepth,
+                1,
                 m_rtAOPipelineLayout,
                 nullptr, 0
             );
@@ -1797,7 +1801,7 @@ namespace vg
 			vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
 				static_cast<uint32_t>(rtShaderStageInfos.size()), rtShaderStageInfos.data(),
 				static_cast<uint32_t>(shaderGroups.size()), shaderGroups.data(),
-				m_context.getRaytracingProperties().maxRecursionDepth,
+				2,
 				m_rtReflectionsPipelineLayout,
 				nullptr, 0
 			);
@@ -2093,7 +2097,7 @@ namespace vg
                 auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
                 OwnCmdTraceRays(m_rtSoftShadowsSecondaryCommandBuffers.at(i),
                     m_rtSoftShadowSBTInfo.m_Buffer, 0, // raygen
-                    m_rtSoftShadowSBTInfo.m_Buffer, 3 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+                    m_rtSoftShadowSBTInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
                     m_rtSoftShadowSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // (any) hit
                     nullptr, 0, 0, // callable
                     m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
@@ -2585,9 +2589,9 @@ namespace vg
 
         std::vector<int32_t> m_sampleCounts;
         std::vector<BufferInfo> m_rtPerFrameInfoBufferInfos;
-        int32_t m_numAOSamples = 4;
+        int32_t m_numAOSamples = 1;
         float m_RTAORadius = 100.0f;
-		int32_t m_numRTReflectionSamples = 4;
+		int32_t m_numRTReflectionSamples = 1;
 
         // soft shadow stuff
         vk::DescriptorSetLayout m_rtSoftShadowsDescriptorSetLayout;

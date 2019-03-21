@@ -1,5 +1,7 @@
 #version 460
 #extension GL_NV_ray_tracing : require
+#extension GL_KHR_shader_subgroup_basic : require
+
 const float PI = 3.1415926535;
 
 layout(location = 0) rayPayloadNV vec3 hitValue;
@@ -66,11 +68,10 @@ vec3 ggx_importance_hemisphere(const in vec2 importance_sample)
 #include "samplePointGen.glsl"
 #include "pbrLight.glsl"
 
-#extension GL_KHR_shader_subgroup_basic : require
-
-
 void main()
 {
+    imageStore(reflectionImage, ivec2(gl_LaunchIDNV.xy), vec4(gl_NumSubgroups, gl_SubgroupID, gl_SubgroupSize, gl_SubgroupInvocationID));
+    subgroupBarrier();
     //TODO get mesh ID (from gbuffer) to get material ID
     const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
     const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeNV.xy);
@@ -78,6 +79,16 @@ void main()
     randomInit(ivec2(gl_LaunchIDNV.xy));
     rand();
     randomFinish(ivec2(gl_LaunchIDNV.xy));
+    if(((gl_LaunchIDNV.x + (gl_LaunchIDNV.y % 2)) % 2) == 0)
+    {
+        imageStore(reflectionImage, ivec2(gl_LaunchIDNV.xy), vec4(0.0f));
+        return;
+    }
+    // if(!(gl_LaunchIDNV.x % 4 == 0 && gl_LaunchIDNV.y % 4 == 0))
+    // {
+    //     imageStore(reflectionImage, ivec2(gl_LaunchIDNV.xy), vec4(0.0f));
+    //     return;
+    // }
 
     vec4 originAndID = texture(gbufferPosSampler, inUV);
     vec3 normal = normalize(texture(gbufferNormalSampler, inUV).xyz);

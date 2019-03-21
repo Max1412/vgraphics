@@ -327,15 +327,21 @@ namespace vg
         auto properties = physDevice.getProperties();
         auto features = physDevice.getFeatures();
 
+        vk::PhysicalDeviceSubgroupProperties subProps;
+
 		vk::PhysicalDeviceProperties2 props;
+        props.pNext = &subProps;
 		if(std::find_if(m_requiredDeviceExtensions.begin(), m_requiredDeviceExtensions.end(),
 			[](const char* input){ return (strcmp(input, "VK_NV_ray_tracing") == 0); })
 			!= m_requiredDeviceExtensions.end())
 		{
 			m_raytracingProperties.emplace();
 			props.pNext = &m_raytracingProperties.value();
+            m_raytracingProperties.value().pNext = &subProps;
 		}
 		physDevice.getProperties2(&props); //NVIDIA only?
+
+        const bool testSubgroups = static_cast<uint32_t>(subProps.supportedStages) & static_cast<uint32_t>(vk::ShaderStageFlagBits::eRaygenNV);
 		
         // look for a GPU with geometry shader
         const bool suitable = (properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu ||

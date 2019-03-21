@@ -66,7 +66,14 @@ PBRScene::PBRScene(const std::filesystem::path& filename)
         {
             vg::VertexPosUvNormal vertex = {};
             vertex.pos = reinterpret_cast<glm::vec3&>(scene->mMeshes[i]->mVertices[j]);
-            vertex.normal = reinterpret_cast<glm::vec3&>(scene->mMeshes[i]->mNormals[j]);
+			if (filename.extension() == std::string(".fbx"))
+			{
+                vertex.normal = glm::vec3(scene->mMeshes[i]->mNormals[j].x, scene->mMeshes[i]->mNormals[j].z, scene->mMeshes[i]->mNormals[j].y);
+			}
+        	else // gltf
+			{
+                vertex.normal = reinterpret_cast<glm::vec3&>(scene->mMeshes[i]->mNormals[j]);
+			}
 
             if (scene->mMeshes[i]->HasTextureCoords(0))
             {
@@ -149,6 +156,16 @@ PBRScene::PBRScene(const std::filesystem::path& filename)
 			const auto ret = mat->GetTexture(type, 0, &reltexPath);
 			if (ret != AI_SUCCESS) throw std::runtime_error("Texture couldn't be loaded by assimp");
 
+			if(filename.extension() == std::string(".fbx"))
+			{
+				std::filesystem::path reltexPathAsPath(reltexPath.C_Str());
+				std::filesystem::path fn = reltexPathAsPath.filename();
+				std::filesystem::path pp = reltexPathAsPath.parent_path().concat("2");
+				std::filesystem::path finishedPath = std::filesystem::path(pp) / fn;
+				finishedPath.replace_extension(".png");
+				reltexPath = finishedPath.string().c_str();
+			}
+
 			auto[it, notAlreadyThere] = set.emplace(reltexPath.C_Str());
 			if (notAlreadyThere)
 			{
@@ -168,32 +185,67 @@ PBRScene::PBRScene(const std::filesystem::path& filename)
     {
         const auto mat = scene->mMaterials[i];
         // todo other types
-        for(aiTextureType type : {aiTextureType_DIFFUSE, aiTextureType_UNKNOWN}) // unknown = metallic roughness in this case
-        {
-	        switch (type)
-	        {
-			case aiTextureType_DIFFUSE:
-				getTexturePaths(mat, type, m_texturesBaseColorPathSet, m_indexedBaseColorTexturePaths, i);
-				break;
-			case aiTextureType_UNKNOWN:
-				getTexturePaths(mat, type, m_texturesMetallicRoughnessPathSet, m_indexedMetallicRoughnessTexturePaths, i);
-				break;
-			default:
-				break;
-	        }
-        }
 
-        // other material info
-		aiColor3D diffColor;
-    	auto ret = mat->Get("$mat.gltf.pbrMetallicRoughness.baseColorFactor", 0, 0, diffColor);
-		if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
-        m_allMaterials.at(i).baseColor = reinterpret_cast<glm::vec3&>(diffColor);
+		if(filename.extension() == std::string(".gltf"))
+		{
+			for (aiTextureType type : {aiTextureType_DIFFUSE, aiTextureType_UNKNOWN}) // unknown = metallic roughness in this case
+			{
+				switch (type)
+				{
+				case aiTextureType_DIFFUSE:
+					getTexturePaths(mat, type, m_texturesBaseColorPathSet, m_indexedBaseColorTexturePaths, i);
+					break;
+				case aiTextureType_UNKNOWN:
+					getTexturePaths(mat, type, m_texturesMetallicRoughnessPathSet, m_indexedMetallicRoughnessTexturePaths, i);
+					break;
+				default:
+					break;
+				}
+			}
 
-		ret = mat->Get("$mat.gltf.pbrMetallicRoughness.metallicFactor", 0, 0, m_allMaterials.at(i).metalness);
-		if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
+			aiColor3D diffColor;
+			auto ret = mat->Get("$mat.gltf.pbrMetallicRoughness.baseColorFactor", 0, 0, diffColor);
+			if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
+			m_allMaterials.at(i).baseColor = reinterpret_cast<glm::vec3&>(diffColor);
 
-		ret = mat->Get("$mat.gltf.pbrMetallicRoughness.roughnessFactor", 0,0, m_allMaterials.at(i).roughness);
-		if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
+			ret = mat->Get("$mat.gltf.pbrMetallicRoughness.metallicFactor", 0, 0, m_allMaterials.at(i).metalness);
+			if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
+
+			ret = mat->Get("$mat.gltf.pbrMetallicRoughness.roughnessFactor", 0, 0, m_allMaterials.at(i).roughness);
+			if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
+		}
+		else if(filename.extension() == std::string(".fbx"))
+		{
+			for (aiTextureType type : {aiTextureType_DIFFUSE, aiTextureType_SPECULAR}) // unknown = metallic roughness in this case
+			{
+				switch (type)
+				{
+				case aiTextureType_DIFFUSE:
+					getTexturePaths(mat, type, m_texturesBaseColorPathSet, m_indexedBaseColorTexturePaths, i);
+					break;
+				case aiTextureType_SPECULAR:
+					getTexturePaths(mat, type, m_texturesMetallicRoughnessPathSet, m_indexedMetallicRoughnessTexturePaths, i);
+					break;
+				default:
+					break;
+				}
+			}
+
+			aiColor3D diffColor;
+			auto ret = mat->Get(AI_MATKEY_COLOR_DIFFUSE, diffColor);
+			if (ret != AI_SUCCESS) throw std::runtime_error("Failure in Material");
+			m_allMaterials.at(i).baseColor = reinterpret_cast<glm::vec3&>(diffColor);
+
+			aiColor3D specColor;
+			mat->Get(AI_MATKEY_COLOR_SPECULAR, specColor);
+			// 0 is ao, not used
+			m_allMaterials.at(i).roughness = specColor[1];
+			m_allMaterials.at(i).metalness = specColor[2];
+		}
+		else
+		{
+			throw std::runtime_error("Non-supported format");
+		}
 
 		if(m_allMaterials.at(i).metalness > 0.5)
 			m_allMaterials.at(i).f0 = glm::vec3(0.91f, 0.92f, 0.92f); // f0: aluminium, gltf does not contain anything

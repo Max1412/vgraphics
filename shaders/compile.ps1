@@ -1,6 +1,7 @@
 param(
     [string]$Folder = "",
-    [string]$Compiler = "glslc"
+    [string]$Compiler = "glslc",
+    [string]$Flags = ""
 )
 $startoutput = "Compiling shaders using " + $Compiler
 Write-Output $startoutput
@@ -13,7 +14,7 @@ foreach($file in $files)
 {
     if($Compiler -eq "glslc")
     {
-        $command = "$Env:VK_SDK_PATH\Bin\glslc.exe $file -o $file.spv -c -I include"
+        $command = "$Env:VK_SDK_PATH\Bin\glslc.exe $file -o $file.spv -c -I include $Flags --target-env=vulkan1.1"
 
         $name = [System.IO.Path]::GetFileName($file)
         $end = [System.IO.Path]::GetDirectoryName($file).split("\")

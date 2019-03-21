@@ -63,5 +63,5 @@ void main()
     rtAOValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * rtAOValue;
     imageStore(rtaoImage, ivec2(gl_LaunchIDNV.xy), vec4(rtAOValue));
 
-    randomFinish(ivec2(gl_LaunchIDNV.xy));
+    //randomFinish(ivec2(gl_LaunchIDNV.xy));
 }

@@ -1,10 +1,26 @@
 vec3 generatePointOnSphericalLight(in vec3 position, in float radius)
 {
-    float theta = rand() * 2.0f * PI;
-    float u = (rand() * 2.0f) - 1.0f;
+    float rand1 = rand();
+    float rand2 = rand();
+    float theta = rand1 * 2.0f * PI;
+    float u = (rand2 * 2.0f) - 1.0f;
     float x = sqrt(1-(u*u)) * cos(theta);
     float y = sqrt(1-(u*u)) * sin(theta);
     float z = u;
+    return position + (radius * vec3(x, y, z));
+}
+
+vec3 generatePointOnSphericalLight2(in vec3 position, in float radius)
+{  
+    float x1, x2;
+    do {
+        x1 = (rand() * 2.0f) - 1.0f;
+        x2 = (rand() * 2.0f) - 1.0f;
+    } while(x1 * x1 + x2 * x2 >= 1.0f);
+
+    float x = 2.0f * x1 * sqrt(1.0f - x1 * x1 - x2 * x2);
+    float y = 2.0f * x2 * sqrt(1.0f - x1 * x1 - x2 * x2);
+    float z = 1.0f - 2.0f * (x1 * x1 + x2 * x2);
     return position + (radius * vec3(x, y, z));
 }
 
@@ -18,9 +34,9 @@ vec3 generatePointOnDiskLight(in vec3 position, in float radius, in vec3 normal)
     vec3 up = vec3(0, 1, 0);
 
     // check if up == normal
-    if(dot(normal, up) == 1.0f) up = vec3(1, 0, 0);
+	vec3 pseudo_perpendicular = (abs(normal.x) <= 0.6f) ? vec3(1, 0, 0) : vec3(0, 1, 0);
 
-    vec3 a = cross(normal, up);
+    vec3 a = cross(normal, pseudo_perpendicular);
     vec3 b = cross(a, normal);
 
     return position + radius * a * x + radius * b * y;

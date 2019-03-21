@@ -33,7 +33,7 @@ void main()
 
     vec3 origin = texture(gbufferPosSampler, inUV).xyz;
 
-    uint rayFlags = gl_RayFlagsOpaqueNV;
+    uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV;
     uint cullMask = 0xff;
     float tmin = 0.001;
     float tmax = 100000.0;
@@ -49,7 +49,7 @@ void main()
         for(int j = 0; j < currentLight.numShadowSamples; j++)
         {            
             //todo jitter direction better. this converges really slowly
-            vec3 direction = normalize(-(currentLight.direction + 0.05 * vec3(rand(), rand(), rand())));
+            vec3 direction = normalize(-(currentLight.direction + 0.2 * vec3(rand(), rand(), rand())));
 
 
             traceNV(topLevelAS, rayFlags, cullMask,
@@ -85,7 +85,7 @@ void main()
 
             //TODO nicht tracen wenn außerhalb von "einflussradius"!!
 
-            traceNV(topLevelAS, rayFlags, cullMask,
+           traceNV(topLevelAS, rayFlags, cullMask,
                 0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
                 origin, tmin, direction, tmax,
                 0 /*payload*/ // X here is location = X of the payload
@@ -135,5 +135,5 @@ void main()
 
 
 
-    randomFinish(ivec2(gl_LaunchIDNV.xy));
+    //randomFinish(ivec2(gl_LaunchIDNV.xy));
 }

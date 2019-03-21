@@ -24,7 +24,7 @@ namespace vg
     {
         int32_t frameSampleCount = 0;
         float RTAORadius = 100.0f;
-        int32_t RTAOSampleCount = 4;
+        int32_t RTAOSampleCount = 1;
     };
 
 	struct RTperFrameInfoCombined
@@ -32,8 +32,8 @@ namespace vg
 		glm::vec3 cameraPosWorld;
 		int32_t frameSampleCount = 0;
 		float RTAORadius = 100.0f;
-		int32_t RTAOSampleCount = 4;
-		int32_t RTReflectionSampleCount = 4;
+		int32_t RTAOSampleCount = 1;
+		int32_t RTReflectionSampleCount = 1;
 	};
 
     struct ImageLoadInfo

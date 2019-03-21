@@ -62,7 +62,7 @@ layout(set = 2, binding = 4) uniform sampler2D reflectionImage;
    
 
 void main() 
-{
+{ 
     vec4 posAndID = texture(gbufferPositionSampler, inUV);
     vec3 WorldPos = posAndID.xyz;
     int drawID = int(posAndID.w);
@@ -96,11 +96,21 @@ void main()
     if(currentMeshInfo.texIndexMetallicRoughness != -1)
         metallicRoughness = textureLod(allTextures[currentMeshInfo.texIndexMetallicRoughness], uvLOD.xy, uvLOD.w).xyz;
     else
-        metallicRoughness = vec3(material.metalness, material.roughness, 0.0f); // what is z?
+    {
+        #ifdef FBX
+        metallicRoughness = vec3(0.0f, material.roughness, material.metalness); // what is z? // FBX
+        #else
+        metallicRoughness = vec3(material.metalness, material.roughness, 0.0f); // what is z? // GLTF
+        #endif
+    }
 
-    float metallic = metallicRoughness.x;
+    #ifdef FBX
+    float metallic = metallicRoughness.z; // FBX
+    #else
+    float metallic = metallicRoughness.x; // GLTF
+    #endif
     float roughness = metallicRoughness.y + 0.01;
-        
+    
     ///////////// AO
     float ao = texture(rtaoImage, inUV).x;
 
@@ -146,7 +156,7 @@ void main()
         vec3 specular     = nominator / denominator;
             
         // add to outgoing radiance Lo
-        float NdotL = max(dot(N, L), 0.0);                
+        float NdotL = max(dot(N, L), 0.0);
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * dirShadow; 
     }   
 
@@ -196,7 +206,7 @@ void main()
 
         // light vector
         vec3 L = normalize(currentLight.position - WorldPos);
-
+        
         // halfway vector
         vec3 H = normalize(V + L);
 
@@ -226,7 +236,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL * spotShadow; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * spotShadow;
     }
 
     vec3 F = fresnelSchlickRoughness(max(dot(V, N), 0.0f), F0, roughness);
@@ -235,8 +245,8 @@ void main()
     kD *= 1.0 - metallic;
 
     vec3 reflectionColor = texture(reflectionImage, inUV).xyz;
-    vec3 backgroundAmbient = vec3(0.003f);
-    vec3 color = (backgroundAmbient * albedo * kD * ao + reflectionColor) + Lo;
+    vec3 backgroundAmbient = vec3(0.03f);
+    vec3 color = (backgroundAmbient * (albedo / PI) * kD * ao + reflectionColor) + Lo;
 
     //vec3 ambient = vec3(0.03) * albedo * ao * (1.0 - metallic);
     //vec3 color = ambient + Lo;
@@ -257,7 +267,5 @@ void main()
     color = pow(color, vec3(1.0/2.2));  
   
     outColor = vec4(color, 1.0f);
-
-    //outColor = vec4(albedo, 1.0f);
 
 }
