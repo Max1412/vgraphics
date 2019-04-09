@@ -148,7 +148,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;// * rtSecondaryShadow; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
     }   
 
     for(int i = 0; i < pointLights.length(); ++i) 
@@ -189,7 +189,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;// * rtSecondaryShadow; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
     }
 
     for(int i = 0; i < spotLights.length(); ++i) 
@@ -236,7 +236,7 @@ void main()
             
         // add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;// * rtSecondaryShadow; 
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * rtSecondaryShadow; 
     }
 
     vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0f), F0, roughness);

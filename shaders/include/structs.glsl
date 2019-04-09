@@ -12,6 +12,7 @@ struct RTperFrameInfo2
     float RTAORadius;
     int RTAOSampleCount;
     int RTReflectionSampleCount;
+    int RTUseLowResReflections;
 };
 
 struct MaterialInfoPBR

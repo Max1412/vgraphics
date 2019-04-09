@@ -30,6 +30,8 @@ void main()
     const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeNV.xy);
 
     randomInit(ivec2(gl_LaunchIDNV.xy));
+    rand();
+    randomFinish(ivec2(gl_LaunchIDNV.xy));
 
     vec3 origin = texture(gbufferPosSampler, inUV).xyz;
 

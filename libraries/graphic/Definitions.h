@@ -20,6 +20,27 @@ namespace vg
     constexpr bool enableValidationLayers = true;
 //#endif
 
+    struct GeometryInstance
+    {
+        // row major 4x3 model matrix
+        float transform[12];
+
+        // instanceId is exposed as gl_InstanceCustomIndexNV
+        uint32_t instanceId : 24;
+
+        // mask to exclude hitting this geometry. if rayMask & instance.mask == 0, the geometry will NOT be hit
+        uint32_t mask : 8;
+
+        // instance offset is basically the hit shader index. 0 if only one hit shader is present
+        uint32_t instanceOffset : 24;
+
+        // any of VkGeometryInstanceFlagBitsNV 
+        uint32_t flags : 8;
+
+        // bottom level AS handle this instance corresponds to
+        uint64_t accelerationStructureHandle;
+    };
+
     struct RTperFrameInfo
     {
         int32_t frameSampleCount = 0;
@@ -34,6 +55,7 @@ namespace vg
 		float RTAORadius = 100.0f;
 		int32_t RTAOSampleCount = 1;
 		int32_t RTReflectionSampleCount = 1;
+        int32_t RTUseLowResReflections = 0;
 	};
 
     struct ImageLoadInfo

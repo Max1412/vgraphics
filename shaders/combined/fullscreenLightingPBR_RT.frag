@@ -50,6 +50,7 @@ layout (push_constant) uniform perFramePush
     mat4 proj;
     vec4 cameraPos;
     float exposure;
+    int useLowResReflections;
 } matrices;
 
 #include "pbrLight.glsl"
@@ -59,7 +60,8 @@ layout(set = 2, binding = 1) uniform sampler2DArray shadowPointImage;
 layout(set = 2, binding = 2) uniform sampler2DArray shadowSpotImage;
 layout(set = 2, binding = 3) uniform sampler2D rtaoImage;
 layout(set = 2, binding = 4) uniform sampler2D reflectionImage;
-   
+layout(set = 2, binding = 5) uniform sampler2D reflectionLowResImage;
+
 
 void main() 
 { 
@@ -244,8 +246,13 @@ void main()
     vec3 kD = vec3(1.0) - kS;
     kD *= 1.0 - metallic;
 
-    vec3 reflectionColor = texture(reflectionImage, inUV).xyz;
-    vec3 backgroundAmbient = vec3(0.03f);
+    vec3 reflectionColor;
+    if(matrices.useLowResReflections == 0)
+        reflectionColor = texture(reflectionImage, inUV).xyz;
+    else
+        reflectionColor = texture(reflectionLowResImage, inUV).xyz;
+
+    vec3 backgroundAmbient = vec3(0.003f);
     vec3 color = (backgroundAmbient * (albedo / PI) * kD * ao + reflectionColor) + Lo;
 
     //vec3 ambient = vec3(0.03) * albedo * ao * (1.0 - metallic);
@@ -267,5 +274,6 @@ void main()
     color = pow(color, vec3(1.0/2.2));  
   
     outColor = vec4(color, 1.0f);
+    //outColor = vec4(reflectionColor*100, 1.0f);
 
 }

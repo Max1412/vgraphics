@@ -14,7 +14,7 @@ foreach($file in $files)
 {
     if($Compiler -eq "glslc")
     {
-        $command = "$Env:VK_SDK_PATH\Bin\glslc.exe $file -o $file.spv -c -I include $Flags --target-env=vulkan1.1"
+        $command = "$Env:VK_SDK_PATH\Bin\glslc.exe $file -o $file.spv -c -I include --target-env=vulkan1.1 $Flags"
 
         $name = [System.IO.Path]::GetFileName($file)
         $end = [System.IO.Path]::GetDirectoryName($file).split("\")
@@ -24,7 +24,7 @@ foreach($file in $files)
     }
     elseif($Compiler -eq "glslangvalidator")
     {
-        $command = "$Env:VK_SDK_PATH\Bin\glslangvalidator.exe -V $file -o $file.spv"
+        $command = "$Env:VK_SDK_PATH\Bin\glslangvalidator.exe -V $file -o $file.spv --target-env vulkan1.1"
         Invoke-Expression $command
     }
     else

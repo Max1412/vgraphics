@@ -34,6 +34,7 @@ layout(std430, set = 0, binding = 10) readonly buffer indirectDrawBuffer
 
 
 layout(set = 0, binding = 5, rgba32f) uniform image2D reflectionImage;
+layout(set = 0, binding = 13, rgba32f) uniform image2D reflectionLowResImage;
 
 // radical inverse function
 float RadicalInverse(uint bits) 
@@ -75,9 +76,8 @@ void main()
     const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
     const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeNV.xy);
 
+
     randomInit(ivec2(gl_LaunchIDNV.xy));
-    rand();
-    randomFinish(ivec2(gl_LaunchIDNV.xy));
 
     vec4 originAndID = texture(gbufferPosSampler, inUV);
     vec3 normal = normalize(texture(gbufferNormalSampler, inUV).xyz);
@@ -153,9 +153,17 @@ void main()
         reflectionValue /= float(perFrameInfo.RTReflectionSampleCount); //weightSum;
 
     float InvSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
-    vec3 oldValue = imageLoad(reflectionImage, ivec2(gl_LaunchIDNV.xy)).xyz;
-    reflectionValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * reflectionValue;
-    imageStore(reflectionImage, ivec2(gl_LaunchIDNV.xy), vec4(reflectionValue, 0.0));
+    if(perFrameInfo.RTUseLowResReflections == 0)
+    {
+        vec3 oldValue = imageLoad(reflectionImage, ivec2(gl_LaunchIDNV.xy)).xyz;
+        reflectionValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * reflectionValue;
+        imageStore(reflectionImage, ivec2(gl_LaunchIDNV.xy), vec4(reflectionValue, 0.0));
+    } else
+    {
+        vec3 oldValue = imageLoad(reflectionLowResImage, ivec2(gl_LaunchIDNV.xy)).xyz;
+        reflectionValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * reflectionValue;
+        imageStore(reflectionLowResImage, ivec2(gl_LaunchIDNV.xy), vec4(reflectionValue, 0.0));
+    }
 
     //randomFinish(ivec2(gl_LaunchIDNV.xy));
 }

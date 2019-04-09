@@ -41,6 +41,7 @@ public:
     const std::vector<uint32_t>& getIndices() const { return m_allIndices; }
     const std::vector<PerMeshInfoPBR>& getDrawCommandData() const { return m_meshes; }
     const std::vector<glm::mat4>& getModelMatrices() const { return m_modelMatrices; }
+    void setModelMatrix(const size_t index, const glm::mat4& value) { m_modelMatrices.at(index) = value; }
     const std::vector<std::pair<std::vector<unsigned>, std::string>>& getIndexedBaseColorTexturePaths() const { return m_indexedBaseColorTexturePaths;  }
 	const std::vector<std::pair<std::vector<unsigned>, std::string>>& getIndexedMetallicRoughnessTexturePaths() const { return m_indexedMetallicRoughnessTexturePaths; }
 

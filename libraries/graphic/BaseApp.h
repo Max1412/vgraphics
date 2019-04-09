@@ -57,11 +57,14 @@ namespace vg
             m_context.getDevice().resetFences(m_inFlightFences.at(m_currentFrame));
             m_context.getGraphicsQueue().submit(1, &submitInfo, m_inFlightFences.at(m_currentFrame));
         };
-
+        void allocBufferVma(BufferInfo& in, vk::BufferCreateInfo bufferCreateInfo, const VmaMemoryUsage properties, const VmaAllocationCreateFlags flags = 0) const;
         BufferInfo createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties,
             vk::SharingMode sharingMode = vk::SharingMode::eExclusive, VmaAllocationCreateFlags flags = 0) const;
 
         void copyBuffer(const vk::Buffer src, const vk::Buffer dst, const vk::DeviceSize size) const;
+
+        template <class T>
+        BufferInfo fillBufferTroughStagedTransferForComputeQueue(const std::vector<T>& data, vk::BufferUsageFlags actualBufferUsage) const;
 
         template <typename T>
         BufferInfo fillBufferTroughStagedTransfer(const std::vector<T>& data, const vk::BufferUsageFlags actualBufferUsage) const;
@@ -129,6 +132,29 @@ namespace vg
         vk::QueryPool m_queryPool;
         
     };
+
+    template <typename T>
+    BufferInfo BaseApp::fillBufferTroughStagedTransferForComputeQueue(const std::vector<T>& data, const vk::BufferUsageFlags actualBufferUsage) const
+    {
+        vk::DeviceSize bufferSize = sizeof(T) * data.size();
+
+        auto stagingBufferInfo = createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eConcurrent, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+        // staging buffer is persistently mapped, no mapping necessary
+        memcpy(stagingBufferInfo.m_BufferAllocInfo.pMappedData, data.data(), stagingBufferInfo.m_BufferAllocInfo.size); // TODO maybe using this size is wrong
+
+        vg::QueueFamilyIndices indices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
+        std::array queueFamilyIndices = { indices.graphicsFamily.value(), indices.computeFamily.value(), indices.transferFamily.value() };
+        vk::BufferCreateInfo bufferCreateInfo({}, bufferSize, vk::BufferUsageFlagBits::eTransferDst | actualBufferUsage, vk::SharingMode::eConcurrent, static_cast<uint32_t>(queueFamilyIndices.size()), queueFamilyIndices.data());
+        BufferInfo returnBufferInfo;
+        allocBufferVma(returnBufferInfo, bufferCreateInfo, VMA_MEMORY_USAGE_GPU_ONLY);
+
+        copyBuffer(stagingBufferInfo.m_Buffer, returnBufferInfo.m_Buffer, bufferSize);
+
+        vmaDestroyBuffer(m_context.getAllocator(), static_cast<VkBuffer>(stagingBufferInfo.m_Buffer), stagingBufferInfo.m_BufferAllocation);
+
+        return returnBufferInfo;
+    }
 
     template <typename T>
     BufferInfo BaseApp::fillBufferTroughStagedTransfer(const std::vector<T>& data, const vk::BufferUsageFlags actualBufferUsage) const

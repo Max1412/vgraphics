@@ -427,7 +427,7 @@ namespace vg
 
             // push view & proj matrix
             std::array vpcr = {
-                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4) + sizeof(float)}
+                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4) + sizeof(float) + sizeof(int32_t)}
             };
 
             vk::PipelineLayoutCreateInfo pipelineLayoutInfo({}, 1, &m_gbufferDescriptorSetLayout, static_cast<uint32_t>(vpcr.size()), vpcr.data());
@@ -653,7 +653,7 @@ namespace vg
 
             // push view & proj matrix
             std::array vpcr = {
-                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4) + sizeof(float)}
+                vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, 2 * sizeof(glm::mat4) + sizeof(glm::vec4) + sizeof(float) + sizeof(int32_t)}
             };
 
             std::array dsls = { m_fullScreenLightingDescriptorSetLayout, m_lightDescriptorSetLayout, m_allRTImageSampleDescriptorSetLayout };
@@ -1020,9 +1020,36 @@ namespace vg
 					vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest, //TODO maybe actually filter those, especially when using half-res
 					vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
 					0.0f, false, 1.0f, false, vk::CompareOp::eAlways, 0.0f,
-					static_cast<float>(m_rtAOImageInfos.at(i).mipLevels),
+					static_cast<float>(m_rtReflectionImageInfos.at(i).mipLevels),
 					vk::BorderColor::eIntOpaqueBlack, false);
 				m_rtReflectionImageSamplers.push_back(m_context.getDevice().createSampler(samplerRTReflections));
+
+                // reflection images LOW RES
+                m_rtReflectionLowResImageInfos.push_back(
+                    createImage(ext.width/2, ext.height/2, 1,
+                        vk::Format::eR32G32B32A32Sfloat,
+                        vk::ImageTiling::eOptimal,
+                        vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+                        VMA_MEMORY_USAGE_GPU_ONLY,
+                        vk::SharingMode::eExclusive, 0,
+                        1)
+                );
+
+                const vk::ImageViewCreateInfo rtReflectionsLowResView({},
+                    m_rtReflectionLowResImageInfos.at(i).m_Image,
+                    vk::ImageViewType::e2D,
+                    vk::Format::eR32G32B32A32Sfloat,
+                    {},
+                    { vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS });
+                m_rtReflectionLowResImageViews.push_back(m_context.getDevice().createImageView(rtReflectionsLowResView));
+
+                vk::SamplerCreateInfo samplerLowResRTReflections({},
+                    vk::Filter::eNearest, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear, //TODO maybe actually filter those, especially when using half-res
+                    vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
+                    0.0f, false, 1.0f, false, vk::CompareOp::eAlways, 0.0f,
+                    static_cast<float>(m_rtReflectionLowResImageInfos.at(i).mipLevels),
+                    vk::BorderColor::eIntOpaqueBlack, false);
+                m_rtReflectionLowResImageSamplers.push_back(m_context.getDevice().createSampler(samplerLowResRTReflections));
 
 
                 // transition images to use them for the first time
@@ -1047,7 +1074,10 @@ namespace vg
 				vk::ImageMemoryBarrier barrierReflectionTOFS = barrierShadowSpotTOFS;
 				barrierReflectionTOFS.image = m_rtReflectionImageInfos.at(i).m_Image;
 
-                std::array barriers = { barrierShadowSpotTOFS, barrierShadowPointTOFS, barrierShadowDirectionalTOFS, barrierAOTOFS, barrierReflectionTOFS };
+                vk::ImageMemoryBarrier barrierLowResReflectionTOFS = barrierShadowSpotTOFS;
+                barrierLowResReflectionTOFS.image = m_rtReflectionLowResImageInfos.at(i).m_Image;
+
+                std::array barriers = { barrierShadowSpotTOFS, barrierShadowPointTOFS, barrierShadowDirectionalTOFS, barrierAOTOFS, barrierReflectionTOFS, barrierLowResReflectionTOFS };
 
                 cmdBuf.pipelineBarrier(
                     vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eFragmentShader,
@@ -1070,13 +1100,15 @@ namespace vg
             vk::DescriptorSetLayoutBinding shadowSpotImageBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, ssf::eFragment, nullptr);
             vk::DescriptorSetLayoutBinding rtAOImageBinding(3, vk::DescriptorType::eCombinedImageSampler, 1, ssf::eFragment, nullptr);
 			vk::DescriptorSetLayoutBinding rtReflectionImageBinding(4, vk::DescriptorType::eCombinedImageSampler, 1, ssf::eFragment, nullptr);
+            vk::DescriptorSetLayoutBinding rtReflectionLowResImageBinding(5, vk::DescriptorType::eCombinedImageSampler, 1, ssf::eFragment, nullptr);
 
             std::array bindings = {
                 shadowDirImageBinding,
                 shadowPointImageBinding,
                 shadowSpotImageBinding,
                 rtAOImageBinding,
-				rtReflectionImageBinding
+				rtReflectionImageBinding,
+                rtReflectionLowResImageBinding
             };
 
             vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
@@ -1140,6 +1172,9 @@ namespace vg
 
 				vk::DescriptorImageInfo rtReflectionsSampleImageInfo(m_rtReflectionImageSamplers.at(i), m_rtReflectionImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
 				vk::WriteDescriptorSet rtReflectionsSampleImageWrite(m_allRTImageSampleDescriptorSets.at(i), 4, 0, 1, vk::DescriptorType::eCombinedImageSampler, &rtReflectionsSampleImageInfo, nullptr, nullptr);
+                
+                vk::DescriptorImageInfo rtReflectionsSampleLowResImageInfo(m_rtReflectionLowResImageSamplers.at(i), m_rtReflectionLowResImageViews.at(i), vk::ImageLayout::eShaderReadOnlyOptimal);
+                vk::WriteDescriptorSet rtReflectionsSampleLowResImageWrite(m_allRTImageSampleDescriptorSets.at(i), 5, 0, 1, vk::DescriptorType::eCombinedImageSampler, &rtReflectionsSampleLowResImageInfo, nullptr, nullptr);
 
                 // store shadow descriptor set
                 vk::DescriptorImageInfo shadowDirStoreImageInfo(nullptr, m_rtSoftShadowDirectionalImageViews.at(i), vk::ImageLayout::eGeneral);
@@ -1166,7 +1201,8 @@ namespace vg
                     shadowPointStoreImageWrite,
                     shadowSpotStoreImageWrite,
                     rtaoStoreImageWrite,
-					rtReflectionsSampleImageWrite
+					rtReflectionsSampleImageWrite,
+                    rtReflectionsSampleLowResImageWrite
                 };
 
                 m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
@@ -1201,6 +1237,7 @@ namespace vg
                 m_randomImageInfos.push_back(createImage(ext.width, ext.height, 1, vk::Format::eR32G32B32A32Uint, vk::ImageTiling::eOptimal,
                     us::eTransferDst | us::eStorage, VMA_MEMORY_USAGE_GPU_ONLY));
 
+
                 // transition image to transfer
                 vk::ImageMemoryBarrier barrierRandomToTransfer(
                     {}, vk::AccessFlagBits::eTransferWrite,
@@ -1212,13 +1249,14 @@ namespace vg
 
                 cmdBuf.pipelineBarrier(
                     vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTransfer,
-                    {}, 0, nullptr, 0, nullptr,
-                    1, &barrierRandomToTransfer
+                    {}, {}, {}, { barrierRandomToTransfer }
                 );
 
                 // copy data to image
                 vk::ImageSubresourceLayers subreslayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1);
                 vk::BufferImageCopy region(0, 0, 0, subreslayers, { 0, 0, 0 }, { ext.width, ext.height, 1 });
+                vk::BufferImageCopy regionLowRes(0, 0, 0, subreslayers, { 0, 0, 0 }, { ext.width / 2, ext.height / 2, 1 });
+
                 cmdBuf.copyBufferToImage(stagingBuffer.m_Buffer, m_randomImageInfos.at(i).m_Image, vk::ImageLayout::eTransferDstOptimal, region);
 
                 // transition image to load/store
@@ -1230,10 +1268,10 @@ namespace vg
                     vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
                 );
 
+
                 cmdBuf.pipelineBarrier(
                     vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eRayTracingShaderNV,
-                    {}, 0, nullptr, 0, nullptr,
-                    1, &barrierRandomFromTransferToStore
+                    {}, {}, {}, { barrierRandomFromTransferToStore }
                 );
 
                 // create view
@@ -1290,7 +1328,6 @@ namespace vg
 
             // TODO 1 Mesh = 1 BLAS + GeometryInstance w/ ModelMatrix as Transform
 
-            const auto toRowMajor4x3 = [](const glm::mat4& in) { return glm::mat3x4(glm::rowMajor4(in)); };
 
             //std::vector<glm::mat4x3> transforms;
             //for (const auto& modelMatrix : m_scene.getModelMatrices())
@@ -1335,7 +1372,7 @@ namespace vg
             }
 
             auto createActualAcc = [&]
-            (vk::AccelerationStructureTypeNV type, uint32_t geometryCount, vk::GeometryNV* geometries, uint32_t instanceCount) -> ASInfo
+            (vk::AccelerationStructureTypeNV type, uint32_t geometryCount, vk::GeometryNV* geometries, uint32_t instanceCount, vk::BuildAccelerationStructureFlagsNV flags) -> ASInfo
             {
                 auto findMemoryType = [&](uint32_t typeFilter, VkMemoryPropertyFlags properties) -> uint32_t
                 {
@@ -1354,7 +1391,7 @@ namespace vg
                 };
 
                 ASInfo returnInfo;
-                vk::AccelerationStructureInfoNV asInfo(type, {}, instanceCount, geometryCount, geometries);
+                vk::AccelerationStructureInfoNV asInfo(type, flags, instanceCount, geometryCount, geometries);
                 vk::AccelerationStructureCreateInfoNV accStrucInfo(0, asInfo);
                 returnInfo.m_AS = m_context.getDevice().createAccelerationStructureNV(accStrucInfo);
 
@@ -1375,31 +1412,11 @@ namespace vg
 
                 return returnInfo;
             };
+            using basf = vk::BuildAccelerationStructureFlagBitsNV;
 
             for (auto& geometry : geometryVec)
-                m_bottomASs.push_back(createActualAcc(vk::AccelerationStructureTypeNV::eBottomLevel, 1, &geometry, 0));
+                m_bottomASs.push_back(createActualAcc(vk::AccelerationStructureTypeNV::eBottomLevel, 1, &geometry, 0, basf::ePreferFastTrace));
 
-
-            struct GeometryInstance
-            {
-                // row major 4x3 model matrix
-                float transform[12];
-
-                // instanceId is exposed as gl_InstanceCustomIndexNV
-                uint32_t instanceId : 24;
-
-                // mask to exclude hitting this geometry. if rayMask & instance.mask == 0, the geometry will NOT be hit
-                uint32_t mask : 8;
-
-                // instance offset is basically the hit shader index. 0 if only one hit shader is present
-                uint32_t instanceOffset : 24;
-
-                // any of VkGeometryInstanceFlagBitsNV 
-                uint32_t flags : 8;
-
-                // bottom level AS handle this instance corresponds to
-                uint64_t accelerationStructureHandle;
-            };
 
             std::vector<GeometryInstance> instances;
 
@@ -1423,10 +1440,10 @@ namespace vg
 
             // todo this buffer is gpu only. maybe change this to make it host visible & coherent like it is in the examples.
             // probaby wont be needed if the instanced is not transformed later on
-            m_instanceBufferInfo = fillBufferTroughStagedTransfer(instances, vk::BufferUsageFlagBits::eRayTracingNV);
+            m_instanceBufferInfo = fillBufferTroughStagedTransferForComputeQueue(instances, vk::BufferUsageFlagBits::eRayTracingNV);
 
 
-            m_topAS = createActualAcc(vk::AccelerationStructureTypeNV::eTopLevel, 0, nullptr, 1);
+            m_topAS = createActualAcc(vk::AccelerationStructureTypeNV::eTopLevel, 0, nullptr, 1, basf::ePreferFastTrace | basf::eAllowUpdate);
 
             auto GetScratchBufferSize = [&](vk::AccelerationStructureNV handle)
             {
@@ -1448,8 +1465,33 @@ namespace vg
             VkDeviceSize topAccelerationStructureBufferSize = GetScratchBufferSize(m_topAS.m_AS);
             VkDeviceSize scratchBufferSize = std::max(maxBLASSize, topAccelerationStructureBufferSize);
 
-            m_scratchBuffer = createBuffer(scratchBufferSize, vk::BufferUsageFlagBits::eRayTracingNV, VMA_MEMORY_USAGE_GPU_ONLY);
+            vg::QueueFamilyIndices indices = m_context.findQueueFamilies(m_context.getPhysicalDevice());
+            std::array queueFamilyIndices = { indices.graphicsFamily.value(), indices.computeFamily.value() };
+            vk::BufferCreateInfo bufferCreateInfo({}, scratchBufferSize, vk::BufferUsageFlagBits::eRayTracingNV, vk::SharingMode::eConcurrent, static_cast<uint32_t>(queueFamilyIndices.size()), queueFamilyIndices.data());
+            allocBufferVma(m_scratchBuffer, bufferCreateInfo, VMA_MEMORY_USAGE_GPU_ONLY);
 
+            //m_scratchBuffer = createBuffer(scratchBufferSize, vk::BufferUsageFlagBits::eRayTracingNV, VMA_MEMORY_USAGE_GPU_ONLY);
+
+            const auto csc = Utility::readFile("combined/test.comp.spv");
+            const auto csm = m_context.createShaderModule(csc);
+            vk::PipelineShaderStageCreateInfo pssci({}, vk::ShaderStageFlagBits::eCompute, csm, "main");
+            auto pl = m_context.getDevice().createPipelineLayoutUnique({});
+            vk::ComputePipelineCreateInfo cpci({}, pssci, pl.get());
+            auto cp = m_context.getDevice().createComputePipelineUnique(nullptr, cpci);
+
+            auto cmdBufComp = beginSingleTimeCommands(m_computeCommandPool);
+
+            cmdBufComp.bindPipeline(vk::PipelineBindPoint::eCompute, cp.get());
+            cmdBufComp.dispatch(1, 1, 1);
+
+
+            endSingleTimeCommands(cmdBufComp, m_context.getComputeQueue(), m_computeCommandPool);
+            m_context.getDevice().waitIdle();
+
+            
+            
+            
+            
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
 
 #undef MemoryBarrier
@@ -1464,19 +1506,20 @@ namespace vg
 
             for (size_t i = 0; i < geometryVec.size(); i++)
             {
-                vk::AccelerationStructureInfoNV asInfoBot(vk::AccelerationStructureTypeNV::eBottomLevel, {}, 0, 1, &geometryVec.at(i));
+                vk::AccelerationStructureInfoNV asInfoBot(vk::AccelerationStructureTypeNV::eBottomLevel, basf::ePreferFastTrace, 0, 1, &geometryVec.at(i));
                 OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoBot), nullptr, 0, VK_FALSE, m_bottomASs.at(i).m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
                 //cmdBuf.buildAccelerationStructureNV(asInfoBot, nullptr, 0, VK_FALSE, m_bottomAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
                 cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, {}, memoryBarrier, nullptr, nullptr);
 
             }
 
-            vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, {}, static_cast<uint32_t>(instances.size()), 0, nullptr);
+            vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, basf::ePreferFastTrace | basf::eAllowUpdate, static_cast<uint32_t>(instances.size()), 0, nullptr);
             OwnCmdBuildAccelerationStructureNV(cmdBuf, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoTop), m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             //cmdBuf.buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
 
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+            m_context.getDevice().waitIdle();
         }
 
         void createRTSoftShadowsPipeline()
@@ -1733,10 +1776,13 @@ namespace vg
 
             // add. info
         	vk::DescriptorSetLayoutBinding randomImageLB(3, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-			vk::DescriptorSetLayoutBinding rtPerFrame(4, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
+
+            vk::DescriptorSetLayoutBinding rtPerFrame(4, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 			//output image
 			vk::DescriptorSetLayoutBinding reflectionImageLB(5, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
-        	// info for shading
+            vk::DescriptorSetLayoutBinding reflectionLowResImageLB(13, vk::DescriptorType::eStorageImage, 1, vk::ShaderStageFlagBits::eRaygenNV, nullptr);
+
+            // info for shading
 			vk::DescriptorSetLayoutBinding vertexBufferLB(6, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 			vk::DescriptorSetLayoutBinding indexBufferLB(7, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 			vk::DescriptorSetLayoutBinding offsetBufferLB(8, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
@@ -1747,7 +1793,7 @@ namespace vg
         	vk::DescriptorSetLayoutBinding allTexturesLayoutBinding(11, vk::DescriptorType::eCombinedImageSampler, static_cast<uint32_t>(m_allImages.size()), vk::ShaderStageFlagBits::eRaygenNV | vk::ShaderStageFlagBits::eClosestHitNV, nullptr);
 
 			std::array bindings = { asLB, gbufferPos, gbufferNormal,gbufferUV, randomImageLB, rtPerFrame,reflectionImageLB,
-			vertexBufferLB,indexBufferLB, offsetBufferLB, materialBufferLB, indirectDrawBufferLB, allTexturesLayoutBinding };
+			vertexBufferLB,indexBufferLB, offsetBufferLB, materialBufferLB, indirectDrawBufferLB, allTexturesLayoutBinding, reflectionLowResImageLB };
 
 			vk::DescriptorSetLayoutCreateInfo layoutInfo({}, static_cast<uint32_t>(bindings.size()), bindings.data());
 
@@ -1872,6 +1918,9 @@ namespace vg
 				vk::DescriptorImageInfo reflectionImageInfo(nullptr, m_rtReflectionImageViews.at(i), vk::ImageLayout::eGeneral);
 				vk::WriteDescriptorSet reflectionImageWrite(m_rtReflectionsDescriptorSets.at(i), 5, 0, 1, vk::DescriptorType::eStorageImage, &reflectionImageInfo, nullptr, nullptr);
 
+                vk::DescriptorImageInfo reflectionLowResImageInfo(nullptr, m_rtReflectionLowResImageViews.at(i), vk::ImageLayout::eGeneral);
+                vk::WriteDescriptorSet reflectionLowResImageWrite(m_rtReflectionsDescriptorSets.at(i), 13, 0, 1, vk::DescriptorType::eStorageImage, &reflectionLowResImageInfo, nullptr, nullptr);
+
 
 				vk::DescriptorBufferInfo vbInfo(m_vertexBufferInfo.m_Buffer, 0, VK_WHOLE_SIZE);
 				vk::WriteDescriptorSet descWriteVertexBuffer(m_rtReflectionsDescriptorSets.at(i), 6, 0, 1, vk::DescriptorType::eStorageBuffer, nullptr, &vbInfo, nullptr);
@@ -1891,7 +1940,7 @@ namespace vg
 
 				std::array descriptorWrites = { accelerationStructureWrite,gbufferPosImageWrite, gbufferNormalImageWrite,gbufferUVImageWrite, randomImageWrite,
 					rtPerFrameWrite , reflectionImageWrite, descWriteVertexBuffer, descWriteIndexBuffer, descWriteOffsetBuffer,
-					descWriteMaterialBuffer, descWriteIndirectBuffer, descWriteAllImages};
+					descWriteMaterialBuffer, descWriteIndirectBuffer, descWriteAllImages, reflectionLowResImageWrite };
 				m_context.getDevice().updateDescriptorSets(descriptorWrites, nullptr);
 			}
         }
@@ -1989,6 +2038,14 @@ namespace vg
             vk::CommandBufferAllocateInfo cmdAllocInfo(m_commandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
             m_commandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfo);
 
+            vk::CommandBufferAllocateInfo cmdAllocInfoCompute(m_computeCommandPool, vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
+            m_computeCommandBuffers = m_context.getDevice().allocateCommandBuffers(cmdAllocInfoCompute);
+            m_computeFinishedFences.resize(m_swapChainFramebuffers.size());
+            vk::FenceCreateInfo fenceInfo;
+            for (auto & fence : m_computeFinishedFences)
+                fence = m_context.getDevice().createFence(fenceInfo);
+
+
             // static secondary buffers (containing draw calls), never change
             vk::CommandBufferAllocateInfo secondaryCmdAllocInfo(m_commandPool, vk::CommandBufferLevel::eSecondary, static_cast<uint32_t>(m_swapChainFramebuffers.size()));
             m_gbufferSecondaryCommandBuffers            = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
@@ -1996,6 +2053,7 @@ namespace vg
             m_rtSoftShadowsSecondaryCommandBuffers      = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
             m_rtAOSecondaryCommandBuffers               = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
 			m_rtReflectionsSecondaryCommandBuffers		= m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
+            m_rtReflectionsLowResSecondaryCommandBuffers = m_context.getDevice().allocateCommandBuffers(secondaryCmdAllocInfo);
 
 
             // dynamic secondary buffers (containing per-frame information), getting re-recorded if necessary
@@ -2190,55 +2248,69 @@ namespace vg
 
 				///// REFLECTION PASS /////
 
-				m_rtReflectionsSecondaryCommandBuffers.at(i).begin(beginInfo3);
+                auto generateReflectionSecondaryCommandBuffer = [this, &OwnCmdTraceRays, &beginInfo3](const glm::ivec2& extent, vk::CommandBuffer& commandBuffer, const int i)
+                {
+                    commandBuffer.begin(beginInfo3);
 
-				m_rtReflectionsSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rtReflectionsPipeline);
-				std::array dss3 = { m_rtReflectionsDescriptorSets.at(i), m_lightDescriptorSet };
-				m_rtReflectionsSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rtReflectionsPipelineLayout,
-					0, static_cast<uint32_t>(dss3.size()), dss3.data(), 0, nullptr);
+                    commandBuffer.bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rtReflectionsPipeline);
+                    std::array dss3 = { m_rtReflectionsDescriptorSets.at(i), m_lightDescriptorSet };
+                    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rtReflectionsPipelineLayout,
+                        0, static_cast<uint32_t>(dss3.size()), dss3.data(), 0, nullptr);
 
-				// transition shadow image to write to it in raygen shader
-				vk::ImageMemoryBarrier barrierReflTORT(
-					vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite,
-					vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
-					VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-					m_rtReflectionImageInfos.at(i).m_Image,
-					vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
-				);
+                    // transition shadow image to write to it in raygen shader
+                    vk::ImageMemoryBarrier barrierReflTORT(
+                        vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eShaderWrite,
+                        vk::ImageLayout::eShaderReadOnlyOptimal, vk::ImageLayout::eGeneral,
+                        VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                        m_rtReflectionImageInfos.at(i).m_Image,
+                        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
+                    );
+                    vk::ImageMemoryBarrier barrierLowResReflTORT = barrierReflTORT;
+                    barrierLowResReflTORT.image = m_rtReflectionLowResImageInfos.at(i).m_Image;
 
-				m_rtReflectionsSecondaryCommandBuffers.at(i).pipelineBarrier(
-					vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
-					vk::DependencyFlagBits::eByRegion, {}, {}, barrierReflTORT
-				);
+                    commandBuffer.pipelineBarrier(
+                        vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                        vk::DependencyFlagBits::eByRegion, {}, {}, { barrierReflTORT, barrierLowResReflTORT }
+                    );
 
-				OwnCmdTraceRays(m_rtReflectionsSecondaryCommandBuffers.at(i),
-					m_rtReflectionsSBTInfo.m_Buffer, 0, // raygen
-					m_rtReflectionsSBTInfo.m_Buffer, 3 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
-					m_rtReflectionsSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // closest hit
-					nullptr, 0, 0, // callable
-					m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
-				);
+                    OwnCmdTraceRays(commandBuffer,
+                        m_rtReflectionsSBTInfo.m_Buffer, 0, // raygen
+                        m_rtReflectionsSBTInfo.m_Buffer, 3 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+                        m_rtReflectionsSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // closest hit
+                        nullptr, 0, 0, // callable
+                        extent.x, extent.y, 1
+                    );
 
-                //m_rtReflectionsSecondaryCommandBuffers.at(i).pipelineBarrier(
-                //    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV,
-                //    vk::DependencyFlagBits::eByRegion, {}, {}, { barrierRandomImage }
-                //);
+                    //m_rtReflectionsSecondaryCommandBuffers.at(i).pipelineBarrier(
+                    //    vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eRayTracingShaderNV,
+                    //    vk::DependencyFlagBits::eByRegion, {}, {}, { barrierRandomImage }
+                    //);
 
-				// transition image to read it in the fullscreen lighting shader
-				vk::ImageMemoryBarrier barrierReflTOFS(
-					vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
-					vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
-					VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-					m_rtReflectionImageInfos.at(i).m_Image,
-					vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
-				);
+                    // transition image to read it in the fullscreen lighting shader
+                    vk::ImageMemoryBarrier barrierReflTOFS(
+                        vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead,
+                        vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
+                        VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+                        m_rtReflectionImageInfos.at(i).m_Image,
+                        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS)
+                    );
 
-				m_rtReflectionsSecondaryCommandBuffers.at(i).pipelineBarrier(
-					vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
-					vk::DependencyFlagBits::eByRegion, {}, {}, barrierReflTOFS
-				);
+                    vk::ImageMemoryBarrier barrierLowResReflTOFS = barrierReflTOFS;
+                    barrierLowResReflTOFS.image = m_rtReflectionLowResImageInfos.at(i).m_Image;
 
-				m_rtReflectionsSecondaryCommandBuffers.at(i).end();
+                    commandBuffer.pipelineBarrier(
+                        vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eFragmentShader,
+                        vk::DependencyFlagBits::eByRegion, {}, {}, { barrierReflTOFS, barrierLowResReflTOFS }
+                    );
+
+                    commandBuffer.end();
+                };
+
+                glm::ivec2 extent(m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height);
+                glm::ivec2 extentLowRes(m_context.getSwapChainExtent().width / 2, m_context.getSwapChainExtent().height / 2);
+
+                generateReflectionSecondaryCommandBuffer(extent, m_rtReflectionsSecondaryCommandBuffers.at(i), i);
+                generateReflectionSecondaryCommandBuffer(extentLowRes, m_rtReflectionsLowResSecondaryCommandBuffers.at(i), i);
 
             }
         }
@@ -2277,6 +2349,11 @@ namespace vg
 				2 * sizeof(glm::mat4) + sizeof(glm::vec4), sizeof(float),
 				&m_exposure);
 
+            m_perFrameSecondaryCommandBuffers.at(currentImage).pushConstants(m_fullscreenLightingPipelineLayout,
+                vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+                2 * sizeof(glm::mat4) + sizeof(glm::vec4) + sizeof(float), sizeof(int32_t),
+                &m_useLowResReflections);
+
             m_perFrameSecondaryCommandBuffers.at(currentImage).end();
 
 
@@ -2285,6 +2362,69 @@ namespace vg
 
             vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse, nullptr);
             m_commandBuffers.at(currentImage).begin(beginInfo);
+
+            // update TLAS
+            if(m_animate) //TODO async compute
+                //TODO fix update because it needs ping-pong AS
+            {
+                vk::CommandBuffer cmdBufForASUpdate = m_useAsync ? m_computeCommandBuffers.at(currentImage) : m_commandBuffers.at(currentImage);
+
+                //// Testing async compute with this pipeline
+                //const auto csc = Utility::readFile("combined/test.comp.spv");
+                //const auto csm = m_context.createShaderModule(csc);
+                //vk::PipelineShaderStageCreateInfo pssci({}, vk::ShaderStageFlagBits::eCompute, csm, "main");
+                //auto pl = m_context.getDevice().createPipelineLayoutUnique({});
+                //vk::ComputePipelineCreateInfo cpci({}, pssci, pl.get());
+                //auto cp = m_context.getDevice().createComputePipelineUnique(nullptr, cpci);
+
+                if(m_useAsync)
+                {
+                    m_computeCommandBuffers.at(currentImage).reset({});
+
+                    m_computeCommandBuffers.at(currentImage).begin(beginInfo);
+
+                    //cmdBufForASUpdate.bindPipeline(vk::PipelineBindPoint::eCompute, cp.get());
+                    //cmdBufForASUpdate.dispatch(1, 1, 1);
+                }
+
+                               
+                const glm::mat4 oldModelMatrix = m_scene.getModelMatrices().at(m_animatedObjectID);
+                glm::mat4 newModelMatrix4x4 = glm::translate(glm::rotate(glm::translate(oldModelMatrix, -glm::vec3(oldModelMatrix[3])), glm::radians(1.0f), glm::vec3(0.0f, 1.0f, 0.0f)), glm::vec3(oldModelMatrix[3]));
+                m_scene.setModelMatrix(m_animatedObjectID, newModelMatrix4x4);
+                auto newModelMatrix = toRowMajor4x3(newModelMatrix4x4);
+                cmdBufForASUpdate.updateBuffer(m_instanceBufferInfo.m_Buffer,
+                    sizeof(GeometryInstance) * m_animatedObjectID + offsetof(GeometryInstance, transform),
+                    sizeof(decltype(newModelMatrix)), glm::value_ptr(newModelMatrix));
+                m_commandBuffers.at(currentImage).updateBuffer(m_modelMatrixBufferInfo.m_Buffer,
+                    sizeof(decltype(newModelMatrix4x4)) * m_animatedObjectID,
+                    sizeof(decltype(newModelMatrix4x4)), glm::value_ptr(newModelMatrix4x4));
+                //BARRIER?
+                vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, vk::BuildAccelerationStructureFlagBitsNV::eAllowUpdate, static_cast<uint32_t>(m_scene.getModelMatrices().size()), 0, nullptr);
+                auto OwnCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdBuildAccelerationStructureNV"));
+                OwnCmdBuildAccelerationStructureNV(cmdBufForASUpdate, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoTop), m_instanceBufferInfo.m_Buffer, 0, m_updateAS, m_topAS.m_AS, m_updateAS ? m_topAS.m_AS : nullptr, m_scratchBuffer.m_Buffer, 0);
+                //m_commandBuffers.at(currentImage).buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, m_updateAS, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
+#undef MemoryBarrier
+                vk::MemoryBarrier memoryBarrier(
+                    vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV,
+                    vk::AccessFlagBits::eAccelerationStructureReadNV
+                );
+#define MemoryBarrier __faststorefence
+                cmdBufForASUpdate.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
+
+                if(m_useAsync)
+                {
+                    m_computeCommandBuffers.at(currentImage).end();
+
+                    vk::SubmitInfo submitInfo(0, nullptr, nullptr, 1, &m_computeCommandBuffers.at(currentImage), 0, nullptr);
+
+                    m_context.getComputeQueue().submit(submitInfo, m_computeFinishedFences.at(currentImage));
+                    m_context.getComputeQueue().waitIdle();
+                }
+
+            }
+
+
+
 
             // 1st renderpass: render into g-buffer
             vk::ClearValue clearPosID(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, -1.0f });
@@ -2327,6 +2467,7 @@ namespace vg
 			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTAORadius), vk::ArrayProxy<const float>{ m_RTAORadius });
 			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTAOSampleCount), vk::ArrayProxy<const int32_t>{ m_numAOSamples });
 			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTReflectionSampleCount), vk::ArrayProxy<const int32_t>{ m_numRTReflectionSamples });
+            m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTUseLowResReflections), vk::ArrayProxy<const int32_t>{ m_useLowResReflections });
 
             m_sampleCounts.at(currentImage)++;
 
@@ -2348,7 +2489,10 @@ namespace vg
             m_commandBuffers.at(currentImage).executeCommands(m_rtAOSecondaryCommandBuffers.at(currentImage));
 
 			// execute command buffers for RT Reflections
-			m_commandBuffers.at(currentImage).executeCommands(m_rtReflectionsSecondaryCommandBuffers.at(currentImage));
+            if(m_useLowResReflections == 0)
+			    m_commandBuffers.at(currentImage).executeCommands(m_rtReflectionsSecondaryCommandBuffers.at(currentImage));
+            else
+                m_commandBuffers.at(currentImage).executeCommands(m_rtReflectionsLowResSecondaryCommandBuffers.at(currentImage));
 
             // 2nd renderpass: render into swapchain
             vk::ClearValue clearValue2(std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f });
@@ -2362,6 +2506,12 @@ namespace vg
 
 
             m_commandBuffers.at(currentImage).end();
+
+            if (m_animate && m_useAsync)
+            {
+                m_context.getDevice().waitForFences(m_computeFinishedFences.at(currentImage), VK_TRUE, std::numeric_limits<uint64_t>::max());
+                m_context.getDevice().resetFences(m_computeFinishedFences.at(currentImage));
+            }
         }
 
         void configureImgui()
@@ -2425,10 +2575,15 @@ namespace vg
                 m_lightManager.lightGUI(m_lightBufferInfos.at(0), m_lightBufferInfos.at(1), m_lightBufferInfos.at(2), true);
                 if (ImGui::BeginMenu("Ray Tracing"))
                 {
-                    ImGui::Checkbox("Accumulate Samples", &m_accumulateRTSamples);
+                    if(ImGui::Checkbox("Accumulate Samples", &m_accumulateRTSamples))
+                    {
+                        m_animate = false;
+                    }
                     ImGui::SliderFloat("RTAO Radius", &m_RTAORadius, 0.1f, 100.0f);
                     ImGui::SliderInt("RTAO Samples", &m_numAOSamples, 1, 64);
 					ImGui::SliderInt("RT Reflection Samples", &m_numRTReflectionSamples, 1, 64);
+                    ImGui::RadioButton("Full Resolution Reflections", &m_useLowResReflections, 0); ImGui::SameLine();
+                    ImGui::RadioButton("Low Resolution Reflections", &m_useLowResReflections, 1);
 
                     ImGui::EndMenu();
                 }
@@ -2437,6 +2592,25 @@ namespace vg
 					ImGui::SliderFloat("Exposure", &m_exposure, 0.1f, 100.0f);
 					ImGui::EndMenu();
 				}
+                if (ImGui::BeginMenu("Animate"))
+                {
+                    ImGui::Checkbox("Animate?", &m_animate);
+                    if(m_animate)
+                    {
+                        ImGui::InputInt("Object ID", &m_animatedObjectID);
+
+                        if (m_animatedObjectID > m_scene.getModelMatrices().size()-1)
+                            m_animatedObjectID = static_cast<int>(m_scene.getModelMatrices().size()-1);
+                        if (m_animatedObjectID < 0)
+                            m_animatedObjectID = 0;
+
+                        ImGui::RadioButton("Rebuild BVH", &m_updateAS, 0); ImGui::SameLine();
+                        ImGui::RadioButton("Update BVH", &m_updateAS, 1);
+                        ImGui::Checkbox("Use Async Compute", &m_useAsync);
+                        m_accumulateRTSamples = false;
+                    }
+                    ImGui::EndMenu();
+                }
                 if(m_imguiShowDemoWindow) ImGui::ShowDemoWindow();
 
                 m_timer.drawGUI();
@@ -2580,7 +2754,9 @@ namespace vg
         ASInfo m_topAS;
         std::vector<ASInfo> m_bottomASs;
         BufferInfo m_instanceBufferInfo;
+
         BufferInfo m_scratchBuffer;
+
         BufferInfo m_offsetBufferInfo;
         //BufferInfo m_transformBufferInfo;
 
@@ -2641,14 +2817,32 @@ namespace vg
 		std::vector<vk::ImageView> m_rtReflectionImageViews;
 		std::vector<vk::Sampler> m_rtReflectionImageSamplers;
 
+        std::vector<ImageInfo> m_rtReflectionLowResImageInfos;
+        std::vector<vk::ImageView> m_rtReflectionLowResImageViews;
+        std::vector<vk::Sampler> m_rtReflectionLowResImageSamplers;
+
 		vk::DescriptorSetLayout m_rtReflectionsDescriptorSetLayout;
 		vk::PipelineLayout m_rtReflectionsPipelineLayout;
 		vk::Pipeline m_rtReflectionsPipeline;
 		std::vector<vk::DescriptorSet> m_rtReflectionsDescriptorSets;
 		BufferInfo m_rtReflectionsSBTInfo;
 		std::vector<vk::CommandBuffer> m_rtReflectionsSecondaryCommandBuffers;
+        std::vector<vk::CommandBuffer> m_rtReflectionsLowResSecondaryCommandBuffers;
 
+        glm::mat3x4 toRowMajor4x3(const glm::mat4 & in) const
+        {
+            return glm::mat3x4(glm::rowMajor4(in));
+        }
 
+        bool m_animate = false;
+        int m_animatedObjectID = 154;
+        int m_updateAS = 0;
+        bool m_useAsync = false;
+
+        int32_t m_useLowResReflections = 0;
+
+        std::vector<vk::Fence> m_computeFinishedFences;
+        std::vector<vk::CommandBuffer> m_computeCommandBuffers;
     };
 }
 

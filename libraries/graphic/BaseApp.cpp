@@ -1,8 +1,4 @@
 #include "BaseApp.h"
-#include "BaseApp.h"
-#include "BaseApp.h"
-#include "BaseApp.h"
-#include "BaseApp.h"
 #include "tiny/tiny_obj_loader.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -18,6 +14,18 @@ namespace vg
 
 	}
 
+    void BaseApp::allocBufferVma(BufferInfo& in, vk::BufferCreateInfo bufferCreateInfo, const VmaMemoryUsage properties, const VmaAllocationCreateFlags flags) const
+	{
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = properties;
+        allocInfo.flags = flags;
+        const auto result = vmaCreateBuffer(m_context.getAllocator(),
+            reinterpret_cast<VkBufferCreateInfo*>(&bufferCreateInfo), &allocInfo, reinterpret_cast<VkBuffer*>(&in.m_Buffer), &in.m_BufferAllocation, &in.m_BufferAllocInfo);
+
+        if (result != VK_SUCCESS)
+            throw std::runtime_error("Buffer creation failed");
+	}
+
 	BufferInfo BaseApp::createBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags& usage, const VmaMemoryUsage properties,
         vk::SharingMode sharingMode, VmaAllocationCreateFlags flags) const
     {
@@ -31,7 +39,7 @@ namespace vg
 
         if (sharingMode == vk::SharingMode::eConcurrent)
         {
-            bufferCreateInfo.queueFamilyIndexCount = 2;
+            bufferCreateInfo.queueFamilyIndexCount = static_cast<uint32_t>(queueFamilyIndices.size());
             bufferCreateInfo.setPQueueFamilyIndices(queueFamilyIndices.data());
         }
 
@@ -110,8 +118,8 @@ namespace vg
         m_transferCommandPool = m_context.getDevice().createCommandPool(transferPoolInfo);
 
         // pool for compute
-        vk::CommandPoolCreateInfo computePoolInfo({}, queueFamilyIndices.computeFamily.value());
-        m_computeCommandPool = m_context.getDevice().createCommandPool(transferPoolInfo);
+        vk::CommandPoolCreateInfo computePoolInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, queueFamilyIndices.computeFamily.value());
+        m_computeCommandPool = m_context.getDevice().createCommandPool(computePoolInfo);
     }
 
     void BaseApp::drawFrame()

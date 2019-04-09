@@ -389,7 +389,7 @@ namespace vg
                 indices.graphicsFamily = i;
 
             bool presentSupport = physDevice.getSurfaceSupportKHR(i, m_surface);
-            if (queueFamily.queueCount > 0 && presentSupport)
+            if (queueFamily.queueCount > 0 && presentSupport && queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
                 indices.presentFamily = i;
 
             if (queueFamily.queueCount > 0 && queueFamily.queueFlags & vk::QueueFlagBits::eTransfer && !(queueFamily.queueFlags & vk::QueueFlagBits::eGraphics))
@@ -403,6 +403,7 @@ namespace vg
 
             i++;
         }
+        //indices.computeFamily = 0;
 
         return indices;
     }
