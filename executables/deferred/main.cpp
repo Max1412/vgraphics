@@ -1067,7 +1067,7 @@ namespace vg
             m_imguiCommandBuffers.at(imageIndex).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
             ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(imageIndex));
             m_imguiCommandBuffers.at(imageIndex).endRenderPass();
-            m_timer.CmdWriteTimestamp(m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics, m_queryPool);
+            m_timer.cmdWriteTimestampStart(m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics, m_queryPool);
             m_imguiCommandBuffers.at(imageIndex).end();
 
             // wait rest of the rendering, submit
