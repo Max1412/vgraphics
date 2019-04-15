@@ -153,6 +153,9 @@ namespace vg
                 m_context.getDevice().destroyFence(m_inFlightFences.at(i));
             }
 
+            for(const auto& fence : m_computeFinishedFences)
+                m_context.getDevice().destroyFence(fence);
+
             m_context.getDevice().destroyCommandPool(m_commandPool);
             m_context.getDevice().destroyCommandPool(m_transferCommandPool);
             m_context.getDevice().destroyCommandPool(m_computeCommandPool);
@@ -228,6 +231,13 @@ namespace vg
             for (const auto& view : m_rtReflectionImageViews)
                 m_context.getDevice().destroyImageView(view);
             for (const auto& sampler : m_rtReflectionImageSamplers)
+                m_context.getDevice().destroySampler(sampler);
+
+            for (const auto& image : m_rtReflectionLowResImageInfos)
+                vmaDestroyImage(m_context.getAllocator(), image.m_Image, image.m_ImageAllocation);
+            for (const auto& view : m_rtReflectionLowResImageViews)
+                m_context.getDevice().destroyImageView(view);
+            for (const auto& sampler : m_rtReflectionLowResImageSamplers)
                 m_context.getDevice().destroySampler(sampler);
 
             for (const auto& image : m_randomImageInfos)
@@ -1482,25 +1492,22 @@ namespace vg
 
             //m_scratchBuffer = createBuffer(scratchBufferSize, vk::BufferUsageFlagBits::eRayTracingNV, VMA_MEMORY_USAGE_GPU_ONLY);
 
-            const auto csc = Utility::readFile("combined/test.comp.spv");
-            const auto csm = m_context.createShaderModule(csc);
-            vk::PipelineShaderStageCreateInfo pssci({}, vk::ShaderStageFlagBits::eCompute, csm, "main");
-            auto pl = m_context.getDevice().createPipelineLayoutUnique({});
-            vk::ComputePipelineCreateInfo cpci({}, pssci, pl.get());
-            auto cp = m_context.getDevice().createComputePipelineUnique(nullptr, cpci);
+            //// compute shader test
+            //const auto csc = Utility::readFile("combined/test.comp.spv");
+            //const auto csm = m_context.createShaderModule(csc);
+            //vk::PipelineShaderStageCreateInfo pssci({}, vk::ShaderStageFlagBits::eCompute, csm, "main");
+            //auto pl = m_context.getDevice().createPipelineLayoutUnique({});
+            //vk::ComputePipelineCreateInfo cpci({}, pssci, pl.get());
+            //auto cp = m_context.getDevice().createComputePipelineUnique(nullptr, cpci);
 
-            auto cmdBufComp = beginSingleTimeCommands(m_computeCommandPool);
+            //auto cmdBufComp = beginSingleTimeCommands(m_computeCommandPool);
 
-            cmdBufComp.bindPipeline(vk::PipelineBindPoint::eCompute, cp.get());
-            cmdBufComp.dispatch(1, 1, 1);
+            //cmdBufComp.bindPipeline(vk::PipelineBindPoint::eCompute, cp.get());
+            //cmdBufComp.dispatch(1, 1, 1);
 
 
-            endSingleTimeCommands(cmdBufComp, m_context.getComputeQueue(), m_computeCommandPool);
-            m_context.getDevice().waitIdle();
-
-            
-            
-            
+            //endSingleTimeCommands(cmdBufComp, m_context.getComputeQueue(), m_computeCommandPool);
+            //m_context.getDevice().waitIdle();
             
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
 
