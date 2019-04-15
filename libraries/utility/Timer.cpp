@@ -22,7 +22,7 @@ void Timer::acquireTimestepDifference(const vk::Device& device, const vk::QueryP
 {
     std::array<uint64_t, 4> fourUints = {3, 3, 3, 3};
 
-    auto res = device.getQueryPoolResults(pool, m_queryIndex + (2 * frameIndex), 2, sizeof(uint64_t)*4, fourUints.data(), 2 * sizeof(uint64_t), vk::QueryResultFlagBits::eWithAvailability | vk::QueryResultFlagBits::e64);
+    auto res = device.getQueryPoolResults(pool, static_cast<uint32_t>(m_queryIndex + (2 * frameIndex)), 2, sizeof(uint64_t) * 4, fourUints.data(), 2 * sizeof(uint64_t), vk::QueryResultFlagBits::eWithAvailability | vk::QueryResultFlagBits::e64);
     if (res != vk::Result::eSuccess)
         throw std::runtime_error("Query not successful");
 
@@ -46,12 +46,12 @@ void Timer::acquireTimestepDifference(const vk::Device& device, const vk::QueryP
 
 void Timer::cmdWriteTimestampStart(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex) const
 {
-    cmdBuffer.writeTimestamp(stageflags, pool, m_queryIndex + (2 * frameIndex));
+    cmdBuffer.writeTimestamp(stageflags, pool, static_cast<uint32_t>(m_queryIndex + (2 * frameIndex)));
 }
 
 void Timer::cmdWriteTimestampStop(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex) const
 {
-    cmdBuffer.writeTimestamp(stageflags, pool, m_queryIndex + (2 * frameIndex) + 1);
+    cmdBuffer.writeTimestamp(stageflags, pool, static_cast<uint32_t>(m_queryIndex + (2 * frameIndex) + 1));
 }
 
 void Timer::drawGUIWindow()
