@@ -12,20 +12,20 @@ public:
     explicit Timer(const bool guiActive) : m_guiActive(guiActive){}
     void acquireCurrentTimestamp(const vk::Device& device, const vk::QueryPool& pool);
     void acquireTimestepDifference(const vk::Device& device, const vk::QueryPool& pool, const size_t frameIndex);
-    void cmdWriteTimestampStart(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex) const;
-    void cmdWriteTimestampStop(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex) const;
+    void cmdWriteTimestampStart(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex = 0) const;
+    void cmdWriteTimestampStop(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex = 0) const;
     void drawGUIWindow();
     void drawGUI();
     void incrementTimestamps() { m_timestampsPerFrameWritten++; }
     void resetTimestamps() { m_timestampsPerFrameWritten = 0; }
-    uint64_t getCurrentNumberOfTimestampsPerFrame() const { return m_timestampsPerFrameWritten; }
-    void setQueryIndex(int32_t index) { m_queryIndex = index; }
-    bool isGuiActive() const { return m_guiActive; }
+    [[nodiscard]] uint64_t getCurrentNumberOfTimestampsPerFrame() const { return m_timestampsPerFrameWritten; }
+    void setQueryIndex(const int32_t index) { m_queryIndex = index; }
+    [[nodiscard]] bool isGuiActive() const { return m_guiActive; }
     void setGuiActiveStatus(const bool status) { m_guiActive = status; }
 
 private:
-    uint32_t m_numFramesToAccumulate = 20;
-    uint32_t m_maxTimeDiffs = 1000;
+    uint32_t m_numFramesToAccumulate = 20U;
+    uint32_t m_maxTimeDiffs = 1000U;
     uint32_t m_queryIndex = 0;
     uint64_t m_currentTimestamp = 0;
     uint64_t m_lastTimestamp = 0;
@@ -40,14 +40,14 @@ public:
     TimerManager(std::map<std::string, Timer> timers, const vg::Context& context)
         : m_timers(std::move(timers)), m_context(context)
     {
-        int32_t index = 0;
+        uint32_t index = 0;
         for (auto& [name, timer] : m_timers)
         {
             timer.setQueryIndex(index);
-            index += 2 * context.getSwapChainImages().size();
+            index += 2 * static_cast<uint32_t>(context.getSwapChainImages().size());
         }
 
-        const vk::QueryPoolCreateInfo qpinfo({}, vk::QueryType::eTimestamp, 2 * context.getSwapChainImages().size() * static_cast<uint32_t>(m_timers.size()));
+        const vk::QueryPoolCreateInfo qpinfo({}, vk::QueryType::eTimestamp, static_cast<uint32_t>(2 * context.getSwapChainImages().size() * m_timers.size()));
         m_queryPool = context.getDevice().createQueryPool(qpinfo);
     }
 
@@ -76,7 +76,7 @@ public:
         queryTimerResult(currentTimer, timerName, frameIndex);
     }
 
-    void queryAllTimerResults(const int32_t frameIndex)
+    void queryAllTimerResults(const size_t frameIndex)
     {
         for(auto& [name, timer] : m_timers)
         {
@@ -114,7 +114,7 @@ public:
 
 private:
 
-    void queryTimerResult(Timer& timer, const std::string& name, const int32_t frameIndex) const
+    void queryTimerResult(Timer& timer, const std::string& name, const size_t frameIndex) const
     {
         if constexpr (vg::enableValidationLayers)
         {
