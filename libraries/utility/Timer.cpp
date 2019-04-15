@@ -18,34 +18,40 @@ void Timer::acquireCurrentTimestamp(const vk::Device& device, const vk::QueryPoo
     m_lastTimestamp = m_currentTimestamp;
 }
 
-void Timer::acquireTimestepDifference(const vk::Device& device, const vk::QueryPool& pool)
+void Timer::acquireTimestepDifference(const vk::Device& device, const vk::QueryPool& pool, const size_t frameIndex)
 {
-    auto res = device.getQueryPoolResults(pool, m_queryIndex, 1, sizeof(uint64_t), &m_lastTimestamp, sizeof(uint64_t), vk::QueryResultFlagBits::eWait | vk::QueryResultFlagBits::e64);
+    std::array<uint64_t, 4> fourUints = {3, 3, 3, 3};
+
+    auto res = device.getQueryPoolResults(pool, m_queryIndex + (2 * frameIndex), 2, sizeof(uint64_t)*4, fourUints.data(), 2 * sizeof(uint64_t), vk::QueryResultFlagBits::eWithAvailability | vk::QueryResultFlagBits::e64);
     if (res != vk::Result::eSuccess)
         throw std::runtime_error("Query not successful");
 
-    res = device.getQueryPoolResults(pool, m_queryIndex + 1, 1, sizeof(uint64_t), &m_currentTimestamp, sizeof(uint64_t), vk::QueryResultFlagBits::eWait | vk::QueryResultFlagBits::e64);
-    if (res != vk::Result::eSuccess)
-        throw std::runtime_error("Query not successful");
+    m_lastTimestamp = fourUints.at(0);
+    m_currentTimestamp = fourUints.at(2);
+
+    if constexpr (vg::enableValidationLayers)
+    {
+        if (fourUints.at(1) != 1 || fourUints.at(3) != 1)
+            __debugbreak();
+    }
 
     // save elapsed time
     m_timeDiffs.push_back(static_cast<float>((m_currentTimestamp - m_lastTimestamp) / 1'000'000.0));
+
 
     // max amount of time diffs
     if (m_timeDiffs.size() > m_maxTimeDiffs)
         m_timeDiffs.erase(m_timeDiffs.begin());
 }
 
-void Timer::cmdWriteTimestampStart(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags,
-    const vk::QueryPool& pool) const
+void Timer::cmdWriteTimestampStart(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex) const
 {
-    cmdBuffer.writeTimestamp(stageflags, pool, m_queryIndex);
+    cmdBuffer.writeTimestamp(stageflags, pool, m_queryIndex + (2 * frameIndex));
 }
 
-void Timer::cmdWriteTimestampStop(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags,
-    const vk::QueryPool& pool) const
+void Timer::cmdWriteTimestampStop(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex) const
 {
-    cmdBuffer.writeTimestamp(stageflags, pool, m_queryIndex + 1);
+    cmdBuffer.writeTimestamp(stageflags, pool, m_queryIndex + (2 * frameIndex) + 1);
 }
 
 void Timer::drawGUIWindow()

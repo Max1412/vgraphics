@@ -41,6 +41,7 @@ namespace vg
             m_camera(m_context.getSwapChainExtent().width,
             m_context.getSwapChainExtent().height),
             m_timerManager(std::map<std::string, Timer>{
+                { {"0 AS Update"}, Timer{false} },
                 { {"1 G-Buffer"}, {} },
                 { {"2 Ray Traced Shadows"}, {} },
                 { {"3 Ray Traced Ambient Occlusion"}, {} },
@@ -2075,7 +2076,7 @@ namespace vg
                 vk::CommandBufferInheritanceInfo inheritanceInfo(m_gbufferRenderpass, 0, m_gbufferFramebuffers.at(i), 0, {}, {});
                 vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse | vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritanceInfo);
                 m_gbufferSecondaryCommandBuffers.at(i).begin(beginInfo);
-                m_timerManager.writeTimestampStart("1 G-Buffer", m_gbufferSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eAllGraphics);
+                m_timerManager.writeTimestampStart("1 G-Buffer", m_gbufferSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eAllGraphics, i);
 
                 m_gbufferSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_gbufferGraphicsPipeline);
 
@@ -2087,7 +2088,7 @@ namespace vg
                 m_gbufferSecondaryCommandBuffers.at(i).drawIndexedIndirect(m_indirectDrawBufferInfo.m_Buffer, 0, static_cast<uint32_t>(m_scene.getDrawCommandData().size()),
                     sizeof(std::decay_t<decltype(*m_scene.getDrawCommandData().data())>));
                 
-                m_timerManager.writeTimestampStop("1 G-Buffer", m_gbufferSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eAllGraphics);
+                m_timerManager.writeTimestampStop("1 G-Buffer", m_gbufferSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eAllGraphics, i);
                 m_gbufferSecondaryCommandBuffers.at(i).end();
 
                 //TODO synchronization for g-buffer resources should be done "implicitly" by renderpasses. check this
@@ -2097,7 +2098,7 @@ namespace vg
                 vk::CommandBufferInheritanceInfo inheritanceInfo2(m_fullscreenLightingRenderpass, 0, m_swapChainFramebuffers.at(i), 0, {}, {});
                 vk::CommandBufferBeginInfo beginInfo2(vk::CommandBufferUsageFlagBits::eSimultaneousUse | vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritanceInfo2);
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).begin(beginInfo2);
-                m_timerManager.writeTimestampStart("5 Fullscreen Lighting", m_fullscreenLightingSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eAllGraphics);
+                m_timerManager.writeTimestampStart("5 Fullscreen Lighting", m_fullscreenLightingSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eAllGraphics, i);
 
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eGraphics, m_fullscreenLightingPipeline);
 
@@ -2108,7 +2109,7 @@ namespace vg
 
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).draw(3, 1, 0, 0);
                 
-                m_timerManager.writeTimestampStop("5 Fullscreen Lighting", m_fullscreenLightingSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eAllGraphics);
+                m_timerManager.writeTimestampStop("5 Fullscreen Lighting", m_fullscreenLightingSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eAllGraphics, i);
 
                 m_fullscreenLightingSecondaryCommandBuffers.at(i).end();
 
@@ -2118,7 +2119,6 @@ namespace vg
                 vk::CommandBufferInheritanceInfo inheritanceInfo3(nullptr, 0, nullptr, 0, {}, {});
                 vk::CommandBufferBeginInfo beginInfo3(vk::CommandBufferUsageFlagBits::eSimultaneousUse , &inheritanceInfo3);
                 m_rtSoftShadowsSecondaryCommandBuffers.at(i).begin(beginInfo3);
-                m_timerManager.writeTimestampStart("2 Ray Traced Shadows", m_rtSoftShadowsSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eRayTracingShaderNV);
 
                 m_rtSoftShadowsSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rtSoftShadowsPipeline);
                 std::array dss = { m_rtSoftShadowsDescriptorSets.at(i), m_lightDescriptorSet, m_shadowImageStoreDescriptorSets.at(i) };
@@ -2165,6 +2165,7 @@ namespace vg
                     vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eRayTracingShaderNV,
                     vk::DependencyFlagBits::eByRegion, {}, {}, { barrierPointShadowTORT, barrierSpotShadowTORT }
                 );
+                m_timerManager.writeTimestampStart("2 Ray Traced Shadows", m_rtSoftShadowsSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eRayTracingShaderNV, i);
 
 
                 auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
@@ -2176,7 +2177,7 @@ namespace vg
                     m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
                 );
 
-                m_timerManager.writeTimestampStop("2 Ray Traced Shadows", m_rtSoftShadowsSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eRayTracingShaderNV);
+                m_timerManager.writeTimestampStop("2 Ray Traced Shadows", m_rtSoftShadowsSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eRayTracingShaderNV, i);
 
                 //vk::ImageMemoryBarrier barrierRandomImage(
                 //    vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite, vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite,
@@ -2214,7 +2215,7 @@ namespace vg
                 //// AO Pass ////
 
                 m_rtAOSecondaryCommandBuffers.at(i).begin(beginInfo3);
-                m_timerManager.writeTimestampStart("3 Ray Traced Ambient Occlusion", m_rtAOSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eRayTracingShaderNV);
+                m_timerManager.writeTimestampStart("3 Ray Traced Ambient Occlusion", m_rtAOSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eRayTracingShaderNV, i);
 
                 m_rtAOSecondaryCommandBuffers.at(i).bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rtAOPipeline);
                 std::array dss2 = { m_rtAODescriptorSets.at(i), m_rtAOImageStoreDescriptorSets.at(i) };
@@ -2262,7 +2263,7 @@ namespace vg
                     vk::DependencyFlagBits::eByRegion, {}, {}, barrierAOTOFS
                 );
 
-                m_timerManager.writeTimestampStop("3 Ray Traced Ambient Occlusion", m_rtAOSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eRayTracingShaderNV);
+                m_timerManager.writeTimestampStop("3 Ray Traced Ambient Occlusion", m_rtAOSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eRayTracingShaderNV, i);
                 m_rtAOSecondaryCommandBuffers.at(i).end();
 
 				///// REFLECTION PASS /////
@@ -2270,7 +2271,7 @@ namespace vg
                 auto generateReflectionSecondaryCommandBuffer = [this, &OwnCmdTraceRays, &beginInfo3](const glm::ivec2& extent, vk::CommandBuffer& commandBuffer, const size_t i)
                 {
                     commandBuffer.begin(beginInfo3);
-                    m_timerManager.writeTimestampStart("4 Ray Traced Reflections", commandBuffer, vk::PipelineStageFlagBits::eRayTracingShaderNV);
+                    m_timerManager.writeTimestampStart("4 Ray Traced Reflections", commandBuffer, vk::PipelineStageFlagBits::eRayTracingShaderNV, i);
 
                     commandBuffer.bindPipeline(vk::PipelineBindPoint::eRayTracingNV, m_rtReflectionsPipeline);
                     std::array dss3 = { m_rtReflectionsDescriptorSets.at(i), m_lightDescriptorSet };
@@ -2323,7 +2324,7 @@ namespace vg
                         vk::DependencyFlagBits::eByRegion, {}, {}, { barrierReflTOFS, barrierLowResReflTOFS }
                     );
 
-                    m_timerManager.writeTimestampStop("4 Ray Traced Reflections", commandBuffer, vk::PipelineStageFlagBits::eRayTracingShaderNV);
+                    m_timerManager.writeTimestampStop("4 Ray Traced Reflections", commandBuffer, vk::PipelineStageFlagBits::eRayTracingShaderNV, i);
                     commandBuffer.end();
                 };
 
@@ -2391,6 +2392,8 @@ namespace vg
             {
                 vk::CommandBuffer cmdBufForASUpdate = m_useAsync ? m_computeCommandBuffers.at(currentImage) : m_commandBuffers.at(currentImage);
 
+                m_timerManager.writeTimestampStart("0 AS Update", cmdBufForASUpdate, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, currentImage);
+
                 //// Testing async compute with this pipeline
                 //const auto csc = Utility::readFile("combined/test.comp.spv");
                 //const auto csm = m_context.createShaderModule(csc);
@@ -2432,6 +2435,8 @@ namespace vg
                 );
 #define MemoryBarrier __faststorefence
                 cmdBufForASUpdate.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
+
+                m_timerManager.writeTimestampStop("0 AS Update", cmdBufForASUpdate, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, currentImage);
 
                 if(m_useAsync)
                 {
@@ -2599,6 +2604,7 @@ namespace vg
                     if(ImGui::Checkbox("Accumulate Samples", &m_accumulateRTSamples))
                     {
                         m_animate = false;
+                        m_timerManager.setGuiActiveStatusForTimer("0 AS Update", m_animate);
                     }
                     ImGui::SliderFloat("RTAO Radius", &m_RTAORadius, 0.1f, 100.0f);
                     ImGui::SliderInt("RTAO Samples", &m_numAOSamples, 1, 64);
@@ -2615,7 +2621,10 @@ namespace vg
 				}
                 if (ImGui::BeginMenu("Animate"))
                 {
-                    ImGui::Checkbox("Animate?", &m_animate);
+                    if(ImGui::Checkbox("Animate?", &m_animate))
+                    {
+                        m_timerManager.setGuiActiveStatusForTimer("0 AS Update", m_animate);
+                    }
                     if(m_animate)
                     {
                         ImGui::InputInt("Object ID", &m_animatedObjectID);
@@ -2637,6 +2646,7 @@ namespace vg
                     ImGui::Dummy({ 600.0f, 0 });
                     m_timerManager.drawTimerGUIs();
 
+                    ImGui::Checkbox("Wait for device idle after every frame", &m_waitIdleAfterFrame);
                     ImGui::EndMenu();
                 }
                 if(m_imguiShowDemoWindow) ImGui::ShowDemoWindow();
@@ -2667,13 +2677,13 @@ namespace vg
             // record cmd buffer
             m_imguiCommandBuffers.at(imageIndex).reset({}); 
             m_imguiCommandBuffers.at(imageIndex).begin(beginInfo);
-            m_timerManager.writeTimestampStart("6 ImGui", m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics);
+            m_timerManager.writeTimestampStart("6 ImGui", m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics, imageIndex);
 
             m_imguiCommandBuffers.at(imageIndex).beginRenderPass(imguiRenderpassInfo, vk::SubpassContents::eInline);
             ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_imguiCommandBuffers.at(imageIndex));
             m_imguiCommandBuffers.at(imageIndex).endRenderPass();
-            m_timer.cmdWriteTimestampStart(m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics, m_queryPool);
-            m_timerManager.writeTimestampStop("6 ImGui", m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics);
+            m_timer.cmdWriteTimestampStart(m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics, m_queryPool, 0);
+            m_timerManager.writeTimestampStop("6 ImGui", m_imguiCommandBuffers.at(imageIndex), vk::PipelineStageFlagBits::eAllGraphics, imageIndex);
 
             m_imguiCommandBuffers.at(imageIndex).end();
 
@@ -2696,8 +2706,12 @@ namespace vg
                 glfwPollEvents();
                 configureImgui();
                 drawFrame();
+                if(m_waitIdleAfterFrame)
+                {
+                    m_context.getDevice().waitIdle();
+                }
                 m_timer.acquireCurrentTimestamp(m_context.getDevice(), m_queryPool);
-                m_timerManager.queryAllTimerResults();
+                m_timerManager.queryAllTimerResults(m_currentFrame);
             }
 
             m_context.getDevice().waitIdle();
@@ -2873,6 +2887,7 @@ namespace vg
         int m_animatedObjectID = 154;
         int m_updateAS = 0;
         bool m_useAsync = false;
+        bool m_waitIdleAfterFrame = false;
 
         int32_t m_useLowResReflections = 0;
 
