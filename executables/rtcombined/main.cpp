@@ -39,15 +39,17 @@ namespace vg
         RTCombinedApp() :
             BaseApp({ VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_shader_draw_parameters", "VK_NV_ray_tracing" }),
             m_camera(m_context.getSwapChainExtent().width,
-            m_context.getSwapChainExtent().height),
+                m_context.getSwapChainExtent().height),
             m_timerManager(std::map<std::string, Timer>{
-                { {"0 AS Update"}, Timer{false} },
+                { {"0 AS Update"}, Timer{ false } },
                 { {"1 G-Buffer"}, {} },
                 { {"2 Ray Traced Shadows"}, {} },
                 { {"3 Ray Traced Ambient Occlusion"}, {} },
                 { {"4 Ray Traced Reflections"}, {} },
                 { {"5 Fullscreen Lighting"}, {} },
-                { {"6 ImGui"}, {} } }, m_context),
+                { {"6 ImGui"}, {} },
+                { {"AS Build"},  Timer{ false } }
+            }, m_context),
             m_scene("pica_pica_-_mini_diorama_01/scene.gltf")
             //m_scene("Bistro/Bistro_Research_Exterior.fbx")
         {
@@ -1508,8 +1510,9 @@ namespace vg
 
             //endSingleTimeCommands(cmdBufComp, m_context.getComputeQueue(), m_computeCommandPool);
             //m_context.getDevice().waitIdle();
-            
+
             auto cmdBuf = beginSingleTimeCommands(m_commandPool);
+            m_timerManager.writeTimestampStart("AS Build", cmdBuf, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, 0);
 
 #undef MemoryBarrier
             vk::MemoryBarrier memoryBarrier(
@@ -1535,8 +1538,17 @@ namespace vg
             //cmdBuf.buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, VK_FALSE, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
             cmdBuf.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
 
+            m_timerManager.writeTimestampStop("AS Build", cmdBuf, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, 0);
             endSingleTimeCommands(cmdBuf, m_context.getGraphicsQueue(), m_commandPool);
+
             m_context.getDevice().waitIdle();
+
+            m_timerManager.querySpecificTimerResults("AS Build", 0);
+            auto timeDiffs = m_timerManager.getTimer("AS Build").getTimeDiffs();
+            m_context.getLogger()->info("Acceleration Structure Build took {} ms for {} meshes, {} triangles", timeDiffs.front(), instances.size(), m_scene.getIndices().size() / 3);
+            //m_context.getLogger()->info("Flags: {}, {}", vk::to_string(basf::ePreferFastTrace), vk::to_string(basf::eAllowUpdate));
+
+            m_timerManager.eraseTimer("AS Build");
         }
 
         void createRTSoftShadowsPipeline()

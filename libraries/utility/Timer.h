@@ -22,6 +22,7 @@ public:
     void setQueryIndex(const int32_t index) { m_queryIndex = index; }
     [[nodiscard]] bool isGuiActive() const { return m_guiActive; }
     void setGuiActiveStatus(const bool status) { m_guiActive = status; }
+    [[nodiscard]] const std::vector<float>& getTimeDiffs() const { return m_timeDiffs; }
 
 private:
     uint32_t m_numFramesToAccumulate = 20U;
@@ -107,9 +108,14 @@ public:
         return m_timers;
     }
 
-    void setGuiActiveStatusForTimer(const std::string& TimerName, const bool status)
+    void setGuiActiveStatusForTimer(const std::string& timerName, const bool status)
     {
-        m_timers.at(TimerName).setGuiActiveStatus(status);
+        m_timers.at(timerName).setGuiActiveStatus(status);
+    }
+
+    void eraseTimer(const std::string& timerName)
+    {
+        m_timers.erase(timerName);
     }
 
 private:
