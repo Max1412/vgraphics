@@ -56,6 +56,7 @@ namespace vg
 		int32_t RTAOSampleCount = 1;
 		int32_t RTReflectionSampleCount = 1;
         int32_t RTUseLowResReflections = 0;
+        float RTReflectionRoughnessThreshold = 0.0f;
 	};
 
     struct ImageLoadInfo

@@ -2514,6 +2514,7 @@ namespace vg
 			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTAOSampleCount), vk::ArrayProxy<const int32_t>{ m_numAOSamples });
 			m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTReflectionSampleCount), vk::ArrayProxy<const int32_t>{ m_numRTReflectionSamples });
             m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTUseLowResReflections), vk::ArrayProxy<const int32_t>{ m_useLowResReflections });
+            m_commandBuffers.at(currentImage).updateBuffer(m_rtPerFrameInfoBufferInfos.at(currentImage).m_Buffer, offsetof(RTperFrameInfoCombined, RTReflectionRoughnessThreshold), vk::ArrayProxy<const float>{ m_reflectionRoughnessThreshold });
 
             m_sampleCounts.at(currentImage)++;
 
@@ -2630,7 +2631,8 @@ namespace vg
 					ImGui::SliderInt("RT Reflection Samples", &m_numRTReflectionSamples, 1, 64);
                     ImGui::RadioButton("Full Resolution Reflections", &m_useLowResReflections, 0); ImGui::SameLine();
                     ImGui::RadioButton("Low Resolution Reflections", &m_useLowResReflections, 1);
-
+                    ImGui::SliderFloat("Roughness Threshold for Reflections", &m_reflectionRoughnessThreshold, 0.0f, 1.0f);
+                    if (m_reflectionRoughnessThreshold > 0.0f) m_accumulateRTSamples = false;
                     ImGui::EndMenu();
                 }
 				if (ImGui::BeginMenu("Lighting"))
@@ -2909,6 +2911,7 @@ namespace vg
         bool m_waitIdleAfterFrame = false;
 
         int32_t m_useLowResReflections = 0;
+        float m_reflectionRoughnessThreshold = 0.0f;
 
         std::vector<vk::Fence> m_computeFinishedFences;
         std::vector<vk::CommandBuffer> m_computeCommandBuffers;
