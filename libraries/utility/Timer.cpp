@@ -54,6 +54,12 @@ void Timer::cmdWriteTimestampStop(const vk::CommandBuffer& cmdBuffer, const vk::
     cmdBuffer.writeTimestamp(stageflags, pool, static_cast<uint32_t>(m_queryIndex + (2 * frameIndex) + 1));
 }
 
+void Timer::dumpTimediffsToFile()
+{
+    for (auto timeDiff : m_timeDiffs)
+        m_logger->info("{},", timeDiff);
+}
+
 void Timer::drawGUIWindow()
 {
     ImGui::SetNextWindowSize(ImVec2(300, 100), ImGuiSetCond_FirstUseEver);

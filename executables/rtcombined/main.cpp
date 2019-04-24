@@ -2668,6 +2668,10 @@ namespace vg
                     m_timerManager.drawTimerGUIs();
 
                     ImGui::Checkbox("Wait for device idle after every frame", &m_waitIdleAfterFrame);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Write Timediffs to file"))
+                        m_timerManager.dumpActiveTimerDiffsToFile();
+
                     ImGui::EndMenu();
                 }
                 if(m_imguiShowDemoWindow) ImGui::ShowDemoWindow();

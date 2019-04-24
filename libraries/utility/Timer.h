@@ -4,6 +4,8 @@
 #include "graphic/Context.h"
 #include <map>
 #include "imgui/imgui.h"
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/basic_file_sink.h"
 
 class Timer
 {
@@ -14,6 +16,7 @@ public:
     void acquireTimestepDifference(const vk::Device& device, const vk::QueryPool& pool, const size_t frameIndex);
     void cmdWriteTimestampStart(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex = 0) const;
     void cmdWriteTimestampStop(const vk::CommandBuffer& cmdBuffer, const vk::PipelineStageFlagBits& stageflags, const vk::QueryPool& pool, const size_t frameIndex = 0) const;
+    void dumpTimediffsToFile();
     void drawGUIWindow();
     void drawGUI();
     void incrementTimestamps() { m_timestampsPerFrameWritten++; }
@@ -23,6 +26,8 @@ public:
     [[nodiscard]] bool isGuiActive() const { return m_guiActive; }
     void setGuiActiveStatus(const bool status) { m_guiActive = status; }
     [[nodiscard]] const std::vector<float>& getTimeDiffs() const { return m_timeDiffs; }
+    void setLogger(std::shared_ptr<spdlog::logger> logger) { m_logger = std::move(logger); }
+    const std::shared_ptr<spdlog::logger>& getLogger() const { return m_logger; }
 
 private:
     uint32_t m_numFramesToAccumulate = 20U;
@@ -33,6 +38,8 @@ private:
     bool m_guiActive = true;
     std::vector<float> m_timeDiffs;
     uint64_t m_timestampsPerFrameWritten = 0;
+
+    std::shared_ptr<spdlog::logger> m_logger = nullptr;
 };
 
 class TimerManager
@@ -46,6 +53,16 @@ public:
         {
             timer.setQueryIndex(index);
             index += 2 * static_cast<uint32_t>(context.getSwapChainImages().size());
+
+            // create logger and directory
+            auto newName = name;
+            std::replace(newName.begin(), newName.end(), ' ', '_');
+            auto path = vg::g_resourcesPath / std::string("logs");
+            std::filesystem::create_directory(path);
+            path /= newName;
+            path.replace_extension(".csv");
+            timer.setLogger(spdlog::basic_logger_mt(name, path.string()));
+            timer.getLogger()->set_pattern("%v");
         }
 
         const vk::QueryPoolCreateInfo qpinfo({}, vk::QueryType::eTimestamp, static_cast<uint32_t>(2 * context.getSwapChainImages().size() * m_timers.size()));
@@ -116,6 +133,17 @@ public:
     void eraseTimer(const std::string& timerName)
     {
         m_timers.erase(timerName);
+    }
+
+    void dumpActiveTimerDiffsToFile()
+    {
+        for (auto& [name, timer] : m_timers)
+        {
+            if (timer.isGuiActive())
+            {
+                timer.dumpTimediffsToFile();
+            }
+        }
     }
 
 private:
