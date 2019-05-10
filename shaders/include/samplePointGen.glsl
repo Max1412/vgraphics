@@ -24,6 +24,16 @@ vec3 generatePointOnSphericalLight2(in vec3 position, in float radius)
     return position + (radius * vec3(x, y, z));
 }
 
+vec3 generateConeDirection(float cosThetaMax)
+{
+    float rand1 = rand();
+    float rand2 = rand();
+    float cosTheta = (1.0 - rand1) + rand1 * cosThetaMax;
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    float phi = rand2 * 2 * PI;
+    return vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+
 vec3 generatePointOnDiskLight(in vec3 position, in float radius, in vec3 normal)
 {
     float r = rand();

@@ -109,6 +109,9 @@ namespace vg
         std::vector<vk::Semaphore> m_imageAvailableSemaphores;
         std::vector<vk::Semaphore> m_graphicsRenderFinishedSemaphores;
         std::vector<vk::Semaphore> m_guiFinishedSemaphores;
+        std::vector<vk::Semaphore> m_ASupdateSemaphores;
+
+        bool m_useAsync = false;
 
         std::vector<vk::Fence> m_inFlightFences;
         int m_currentFrame = 0;

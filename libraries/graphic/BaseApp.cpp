@@ -141,13 +141,27 @@ namespace vg
             throw std::runtime_error("Failed to acquire swap chain image");
         }
 
-        vk::Semaphore waitSemaphores[] = { m_imageAvailableSemaphores.at(m_currentFrame) };
-        vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+        std::vector<vk::Semaphore> waitSemaphores;
+        std::vector< vk::PipelineStageFlags> waitStages;
+
+        if (m_useAsync)
+        {
+            waitSemaphores = { m_imageAvailableSemaphores.at(m_currentFrame), m_ASupdateSemaphores.at(m_currentFrame) };
+            waitStages = { vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eRayTracingShaderNV };
+
+        }
+        else
+        {
+            waitSemaphores = { m_imageAvailableSemaphores.at(m_currentFrame) };
+            waitStages = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+        }
+
         vk::Semaphore signalSemaphores[] = { m_graphicsRenderFinishedSemaphores.at(m_currentFrame) };
 
         recordPerFrameCommandBuffers(imageIndex);
 
-        vk::SubmitInfo submitInfo(1, waitSemaphores, waitStages, 1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
+        vk::SubmitInfo submitInfo(static_cast<uint32_t>(waitSemaphores.size()), waitSemaphores.data(), waitStages.data(),
+            1, &m_commandBuffers.at(imageIndex), 1, signalSemaphores);
 
         m_context.getGraphicsQueue().submit(submitInfo, nullptr); // what to do with this fence?
 

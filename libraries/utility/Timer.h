@@ -27,7 +27,7 @@ public:
     void setGuiActiveStatus(const bool status) { m_guiActive = status; }
     [[nodiscard]] const std::vector<float>& getTimeDiffs() const { return m_timeDiffs; }
     void setLogger(std::shared_ptr<spdlog::logger> logger) { m_logger = std::move(logger); }
-    const std::shared_ptr<spdlog::logger>& getLogger() const { return m_logger; }
+    [[nodiscard]] const std::shared_ptr<spdlog::logger>& getLogger() const { return m_logger; }
 
 private:
     uint32_t m_numFramesToAccumulate = 20U;

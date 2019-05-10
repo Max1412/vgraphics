@@ -145,7 +145,7 @@ void main()
         vec3 direction = rotateToNormal(ggx_importance_hemisphere(ggx_importance_sample(vec2(rand(), rand()), roughness)), reflectedViewVector);
         while(dot(direction, normal) < 0.0f) // re-roll if direction is not in hemisphere
         {
-            direction = rotateToNormal(ggx_importance_hemisphere(ggx_importance_sample(vec2(rand(), rand()), roughness)), normal);
+            direction = rotateToNormal(ggx_importance_hemisphere(ggx_importance_sample(vec2(rand(), rand()), roughness)), reflectedViewVector);
         }
 
         traceNV(topLevelAS, rayFlags, cullMask,

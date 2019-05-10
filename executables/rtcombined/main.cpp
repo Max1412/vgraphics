@@ -52,7 +52,12 @@ namespace vg
             }, m_context),
             m_scene("pica_pica_-_mini_diorama_01/scene.gltf")
             //m_scene("Bistro/Bistro_Research_Exterior.fbx")
+            //m_scene("Bistro/Bistro_Research_Interior.fbx")
+
         {
+            //shaderExtension = std::string(".fbx.spv");
+            shaderExtension = std::string(".spv");
+
             createCommandPools();
 		    createSceneInformation("pica_pica_-_mini_diorama_01/");
 			//createSceneInformation("Bistro/");
@@ -393,8 +398,8 @@ namespace vg
 
         void createGBufferPipeline()
         {
-            const auto vertShaderCode = Utility::readFile("combined/gbuffer.vert.spv");
-            const auto fragShaderCode = Utility::readFile("combined/gbuffer.frag.spv");
+            const auto vertShaderCode = Utility::readFile("combined/gbuffer.vert" + shaderExtension);
+            const auto fragShaderCode = Utility::readFile("combined/gbuffer.frag" + shaderExtension);
 
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
@@ -626,8 +631,8 @@ namespace vg
         void createFullscreenLightingPipeline()
         {
 
-            const auto vertShaderCode = Utility::readFile("deferred/fullscreen.vert.spv");
-            const auto fragShaderCode = Utility::readFile("combined/fullscreenLightingPBR_RT.frag.spv");
+            const auto vertShaderCode = Utility::readFile("deferred/fullscreen.vert" + shaderExtension);
+            const auto fragShaderCode = Utility::readFile("combined/fullscreenLightingPBR_RT.frag" + shaderExtension);
 
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
@@ -1495,7 +1500,7 @@ namespace vg
             //m_scratchBuffer = createBuffer(scratchBufferSize, vk::BufferUsageFlagBits::eRayTracingNV, VMA_MEMORY_USAGE_GPU_ONLY);
 
             //// compute shader test
-            //const auto csc = Utility::readFile("combined/test.comp.spv");
+            //const auto csc = Utility::readFile("combined/test.comp" + shaderExtension);
             //const auto csm = m_context.createShaderModule(csc);
             //vk::PipelineShaderStageCreateInfo pssci({}, vk::ShaderStageFlagBits::eCompute, csm, "main");
             //auto pl = m_context.getDevice().createPipelineLayoutUnique({});
@@ -1549,6 +1554,12 @@ namespace vg
             //m_context.getLogger()->info("Flags: {}, {}", vk::to_string(basf::ePreferFastTrace), vk::to_string(basf::eAllowUpdate));
 
             m_timerManager.eraseTimer("AS Build");
+
+
+            for (int i = 0; i < m_context.max_frames_in_flight; i++)
+            {
+                m_ASupdateSemaphores.push_back(m_context.getDevice().createSemaphore({}));
+            }
         }
 
         void createRTSoftShadowsPipeline()
@@ -1570,16 +1581,16 @@ namespace vg
 
             //// 2. Create Pipeline
 
-            const auto rgenShaderCode = Utility::readFile("combined/softshadowPBR.rgen.spv");
+            const auto rgenShaderCode = Utility::readFile("combined/softshadowPBR.rgen" + shaderExtension);
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 
-            //const auto ahitShaderCode = Utility::readFile("combined/softshadow.rahit.spv");
+            //const auto ahitShaderCode = Utility::readFile("combined/softshadow.rahit" + shaderExtension);
             //const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
-            const auto chitShaderCode = Utility::readFile("combined/softshadow.rchit.spv");
+            const auto chitShaderCode = Utility::readFile("combined/softshadow.rchit" + shaderExtension);
             const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
 
-            const auto missShaderCode = Utility::readFile("combined/softshadow.rmiss.spv");
+            const auto missShaderCode = Utility::readFile("combined/softshadow.rmiss" + shaderExtension);
             const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
 
@@ -1690,16 +1701,16 @@ namespace vg
 
             //// 2. Create Pipeline
 
-            const auto rgenShaderCode = Utility::readFile("combined/rtao.rgen.spv");
+            const auto rgenShaderCode = Utility::readFile("combined/rtao.rgen" + shaderExtension);
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 
-            //const auto ahitShaderCode = Utility::readFile("combined/rtao.rahit.spv");
+            //const auto ahitShaderCode = Utility::readFile("combined/rtao.rahit" + shaderExtension);
             //const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
-            const auto chitShaderCode = Utility::readFile("combined/rtao.rchit.spv");
+            const auto chitShaderCode = Utility::readFile("combined/rtao.rchit" + shaderExtension);
             const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
 
-            const auto missShaderCode = Utility::readFile("combined/rtao.rmiss.spv");
+            const auto missShaderCode = Utility::readFile("combined/rtao.rmiss" + shaderExtension);
             const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
 
@@ -1830,19 +1841,19 @@ namespace vg
 
 			//// 2. Create Pipeline
 
-			const auto rgenShaderCode = Utility::readFile("combined/rtreflectionsPBR.rgen.spv");
+			const auto rgenShaderCode = Utility::readFile("combined/rtreflectionsPBR.rgen" + shaderExtension);
 			const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 			
-			const auto chitShaderCode = Utility::readFile("combined/rtreflectionsPBR.rchit.spv");
+			const auto chitShaderCode = Utility::readFile("combined/rtreflectionsPBR.rchit" + shaderExtension);
 			const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
 
-			const auto missShaderCode = Utility::readFile("combined/rtreflections.rmiss.spv");
+			const auto missShaderCode = Utility::readFile("combined/rtreflections.rmiss" + shaderExtension);
 			const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
-			const auto chitSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rchit.spv");
+			const auto chitSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rchit" + shaderExtension);
 			const auto chitSecondaryShaderModule = m_context.createShaderModule(chitSecondaryShaderCode);
 
-			const auto missSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rmiss.spv");
+			const auto missSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rmiss" + shaderExtension);
 			const auto missSecondaryShaderModule = m_context.createShaderModule(missSecondaryShaderCode);
 
 
@@ -2411,10 +2422,20 @@ namespace vg
             {
                 vk::CommandBuffer cmdBufForASUpdate = m_useAsync ? m_computeCommandBuffers.at(currentImage) : m_commandBuffers.at(currentImage);
 
-                m_timerManager.writeTimestampStart("0 AS Update", cmdBufForASUpdate, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, currentImage);
+#undef MemoryBarrier
+                vk::MemoryBarrier memoryBarrier(
+                    vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV,
+                    vk::AccessFlagBits::eAccelerationStructureReadNV
+                );
+                vk::MemoryBarrier memoryBarrier1(
+                    vk::AccessFlagBits::eAccelerationStructureReadNV,
+                    vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV
+                );
+
+#define MemoryBarrier __faststorefence
 
                 //// Testing async compute with this pipeline
-                //const auto csc = Utility::readFile("combined/test.comp.spv");
+                //const auto csc = Utility::readFile("combined/test.comp" + shaderExtension);
                 //const auto csm = m_context.createShaderModule(csc);
                 //vk::PipelineShaderStageCreateInfo pssci({}, vk::ShaderStageFlagBits::eCompute, csm, "main");
                 //auto pl = m_context.getDevice().createPipelineLayoutUnique({});
@@ -2430,6 +2451,9 @@ namespace vg
                     //cmdBufForASUpdate.bindPipeline(vk::PipelineBindPoint::eCompute, cp.get());
                     //cmdBufForASUpdate.dispatch(1, 1, 1);
                 }
+                m_timerManager.writeTimestampStart("0 AS Update", cmdBufForASUpdate, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, currentImage);
+                
+                cmdBufForASUpdate.pipelineBarrier(vk::PipelineStageFlagBits::eRayTracingShaderNV, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, {}, memoryBarrier1, nullptr, nullptr);
 
                                
                 const glm::mat4 oldModelMatrix = m_scene.getModelMatrices().at(m_animatedObjectID);
@@ -2447,24 +2471,27 @@ namespace vg
                 auto OwnCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdBuildAccelerationStructureNV"));
                 OwnCmdBuildAccelerationStructureNV(cmdBufForASUpdate, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoTop), m_instanceBufferInfo.m_Buffer, 0, m_updateAS, m_topAS.m_AS, m_updateAS ? m_topAS.m_AS : nullptr, m_scratchBuffer.m_Buffer, 0);
                 //m_commandBuffers.at(currentImage).buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, m_updateAS, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
-#undef MemoryBarrier
-                vk::MemoryBarrier memoryBarrier(
-                    vk::AccessFlagBits::eAccelerationStructureWriteNV | vk::AccessFlagBits::eAccelerationStructureReadNV,
-                    vk::AccessFlagBits::eAccelerationStructureReadNV
-                );
-#define MemoryBarrier __faststorefence
+
                 cmdBufForASUpdate.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
 
                 m_timerManager.writeTimestampStop("0 AS Update", cmdBufForASUpdate, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, currentImage);
 
                 if(m_useAsync)
                 {
+                    size_t oldSemIndex = (m_currentFrame + m_guiFinishedSemaphores.size() - 1) % m_guiFinishedSemaphores.size();
+
+                    //m_context.getGraphicsQueue().waitIdle();
                     m_computeCommandBuffers.at(currentImage).end();
 
-                    vk::SubmitInfo submitInfo(0, nullptr, nullptr, 1, &m_computeCommandBuffers.at(currentImage), 0, nullptr);
+                    std::array<vk::PipelineStageFlags, 1> waitStages = { vk::PipelineStageFlagBits::eAccelerationStructureBuildNV };
 
-                    m_context.getComputeQueue().submit(submitInfo, m_computeFinishedFences.at(currentImage));
-                    m_context.getComputeQueue().waitIdle();
+                    vk::SubmitInfo submitInfo(0, nullptr, nullptr,
+                        //1, &m_guiFinishedSemaphores.at(oldSemIndex), waitStages.data(),
+                        1, & m_computeCommandBuffers.at(currentImage),
+                        1, &m_ASupdateSemaphores.at(m_currentFrame));
+
+                    m_context.getComputeQueue().submit(submitInfo, nullptr);// , m_computeFinishedFences.at(currentImage));
+                    //m_context.getComputeQueue().waitIdle();
                 }
 
             }
@@ -2553,11 +2580,11 @@ namespace vg
 
             m_commandBuffers.at(currentImage).end();
 
-            if (m_animate && m_useAsync)
-            {
-                m_context.getDevice().waitForFences(m_computeFinishedFences.at(currentImage), VK_TRUE, std::numeric_limits<uint64_t>::max());
-                m_context.getDevice().resetFences(m_computeFinishedFences.at(currentImage));
-            }
+            //if (m_animate && m_useAsync)
+            //{
+            //    m_context.getDevice().waitForFences(m_computeFinishedFences.at(currentImage), VK_TRUE, std::numeric_limits<uint64_t>::max());
+            //    m_context.getDevice().resetFences(m_computeFinishedFences.at(currentImage));
+            //}
         }
 
         void configureImgui()
@@ -2911,7 +2938,7 @@ namespace vg
         bool m_animate = false;
         int m_animatedObjectID = 154;
         int m_updateAS = 0;
-        bool m_useAsync = false;
+        //bool m_useAsync = false;
         bool m_waitIdleAfterFrame = false;
 
         int32_t m_useLowResReflections = 0;
@@ -2919,6 +2946,9 @@ namespace vg
 
         std::vector<vk::Fence> m_computeFinishedFences;
         std::vector<vk::CommandBuffer> m_computeCommandBuffers;
+
+        std::string shaderExtension;
+
     };
 }
 

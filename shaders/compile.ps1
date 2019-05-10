@@ -14,13 +14,19 @@ foreach($file in $files)
 {
     if($Compiler -eq "glslc")
     {
+        # GLTF
         $command = "$Env:VK_SDK_PATH\Bin\glslc.exe $file -o $file.spv -c -I include --target-env=vulkan1.1 $Flags"
+        Invoke-Expression $command
+
+        # FBX
+        $command = "$Env:VK_SDK_PATH\Bin\glslc.exe $file -o $file.fbx.spv -c -I include --target-env=vulkan1.1 -DFBX $Flags"
+        Invoke-Expression $command
 
         $name = [System.IO.Path]::GetFileName($file)
         $end = [System.IO.Path]::GetDirectoryName($file).split("\")
         $lastDirName = $end[$end.Count - 1]
         Write-Output $lastDirName\$name
-        Invoke-Expression $command
+
     }
     elseif($Compiler -eq "glslangvalidator")
     {
