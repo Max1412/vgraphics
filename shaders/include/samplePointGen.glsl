@@ -30,7 +30,7 @@ vec3 generateConeDirection(float cosThetaMax)
     float rand2 = rand();
     float cosTheta = (1.0 - rand1) + rand1 * cosThetaMax;
     float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-    float phi = rand2 * 2 * PI;
+    float phi = rand2 * 2.0 * PI;
     return vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
 

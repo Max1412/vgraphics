@@ -86,6 +86,8 @@ void main()
     vec3 origin = originAndID.xyz;
     int MeshID = int(originAndID.w);
 
+    if(MeshID == -1) return; //background
+
     PerMeshInfoPBR currentMesh = perMeshInfos.perMesh[MeshID];
     MaterialInfoPBR currentMaterial = materials[currentMesh.assimpMaterialIndex];
     //if(currentMaterial.N < 1) return; 

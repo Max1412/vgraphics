@@ -61,8 +61,8 @@ void main()
     
     float InvSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
 
-    HaltonState hState;
-    haltonInit(hState, int(gl_LaunchIDNV.x), int(gl_LaunchIDNV.y), 1, 2, perFrameInfo.frameSampleCount, 1);
+    // HaltonState hState;
+    // haltonInit(hState, int(gl_LaunchIDNV.x), int(gl_LaunchIDNV.y), 1, 2, perFrameInfo.frameSampleCount, 1);
 
     for(int i = 0; i < dirLights.length(); i++)
     {
@@ -110,11 +110,17 @@ void main()
 
             vec3 toLight = normalize(currentLight.position - origin);
 
-            float cosTheta = atan(currentLight.radius, -tmax);
+            float hyp = sqrt(tmax * tmax + currentLight.radius * currentLight.radius);
+            float cosTheta = tmax/hyp;//atan(currentLight.radius, tmax);
             vec3 directionCone = generateConeDirection(cosTheta);
             vec3 direction = rotateToNormal(directionCone, toLight);
-            tmax = length(direction);
+            tmax += currentLight.radius;
             direction = normalize(direction);
+
+            // vec3 pointOnLight = generatePointOnSphericalLight(currentLight.position, currentLight.radius);
+            // tmax = length(pointOnLight - origin);
+
+            // vec3 direction = normalize(pointOnLight - origin);
 
             //TODO nicht tracen wenn außerhalb von "einflussradius"!!
             hitValue = 0U;
