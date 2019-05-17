@@ -1587,8 +1587,8 @@ namespace vg
             //const auto ahitShaderCode = Utility::readFile("combined/softshadow.rahit" + shaderExtension);
             //const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
-            const auto chitShaderCode = Utility::readFile("combined/softshadow.rchit" + m_shaderExtension);
-            const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
+            //const auto chitShaderCode = Utility::readFile("combined/softshadow.rchit" + m_shaderExtension);
+            //const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
 
             const auto missShaderCode = Utility::readFile("combined/softshadow.rmiss" + m_shaderExtension);
             const auto missShaderModule = m_context.createShaderModule(missShaderCode);
@@ -1596,7 +1596,7 @@ namespace vg
 
             std::array rtShaderStageInfos = {
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
-                vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
+                //vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
                 //vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eAnyHitNV, ahitShaderModule, "main"),
 
                 vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main")
@@ -1610,11 +1610,11 @@ namespace vg
             std::array shaderGroups = {
                 // group 0: raygen
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
-                // group 1: any hit
-                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
+                // group 1: hit
+                //vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
                 //vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV},
                 // group 2: miss
-                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
+                vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
             };
 
             vk::RayTracingPipelineCreateInfoNV rayPipelineInfo({},
@@ -1630,7 +1630,7 @@ namespace vg
             // destroy shader modules:
             m_context.getDevice().destroyShaderModule(rgenShaderModule);
             //m_context.getDevice().destroyShaderModule(ahitShaderModule);
-            m_context.getDevice().destroyShaderModule(chitShaderModule);
+            //m_context.getDevice().destroyShaderModule(chitShaderModule);
             m_context.getDevice().destroyShaderModule(missShaderModule);
 
             //// 3. Create Shader Binding Table
@@ -1850,8 +1850,8 @@ namespace vg
 			const auto missShaderCode = Utility::readFile("combined/rtreflections.rmiss" + m_shaderExtension);
 			const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
-			const auto chitSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rchit" + m_shaderExtension);
-			const auto chitSecondaryShaderModule = m_context.createShaderModule(chitSecondaryShaderCode);
+			//const auto chitSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rchit" + m_shaderExtension);
+			//const auto chitSecondaryShaderModule = m_context.createShaderModule(chitSecondaryShaderCode);
 
 			const auto missSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rmiss" + m_shaderExtension);
 			const auto missSecondaryShaderModule = m_context.createShaderModule(missSecondaryShaderCode);
@@ -1860,7 +1860,7 @@ namespace vg
 			std::array rtShaderStageInfos = {
 				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eRaygenNV, rgenShaderModule, "main"),
 				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitShaderModule, "main"),
-				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitSecondaryShaderModule, "main"),
+				//vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eClosestHitNV, chitSecondaryShaderModule, "main"),
 				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missShaderModule, "main"),
 				vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eMissNV, missSecondaryShaderModule, "main")
 			};
@@ -1876,11 +1876,11 @@ namespace vg
 				// group 1: closest hit (for reflections)
 				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
 				// group 2: closest hit (for secondary rays: shadows in reflection)
-				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
+				//vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
 				// group 3: miss (for reflection rays)
-				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 3, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
+				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 2, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
 				// group 4: miss (for secondary rays: shadows in reflection)
-				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 4, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
+				vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 3, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
 
 			};
 
@@ -1898,7 +1898,7 @@ namespace vg
 			m_context.getDevice().destroyShaderModule(rgenShaderModule);
 			m_context.getDevice().destroyShaderModule(chitShaderModule);
 			m_context.getDevice().destroyShaderModule(missShaderModule);
-			m_context.getDevice().destroyShaderModule(chitSecondaryShaderModule);
+			//m_context.getDevice().destroyShaderModule(chitSecondaryShaderModule);
 			m_context.getDevice().destroyShaderModule(missSecondaryShaderModule);
 
 			//// 3. Create Shader Binding Table
@@ -2201,8 +2201,8 @@ namespace vg
                 auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
                 OwnCmdTraceRays(m_rtSoftShadowsSecondaryCommandBuffers.at(i),
                     m_rtSoftShadowSBTInfo.m_Buffer, 0, // raygen
-                    m_rtSoftShadowSBTInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
-                    m_rtSoftShadowSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // (any) hit
+                    m_rtSoftShadowSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+                    nullptr, 0, 0, // m_rtSoftShadowSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // (any) hit
                     nullptr, 0, 0, // callable
                     m_context.getSwapChainExtent().width, m_context.getSwapChainExtent().height, 1
                 );
@@ -2326,7 +2326,7 @@ namespace vg
 
                     OwnCmdTraceRays(commandBuffer,
                         m_rtReflectionsSBTInfo.m_Buffer, 0, // raygen
-                        m_rtReflectionsSBTInfo.m_Buffer, 3 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
+                        m_rtReflectionsSBTInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
                         m_rtReflectionsSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // closest hit
                         nullptr, 0, 0, // callable
                         extent.x, extent.y, 1

@@ -65,7 +65,7 @@ void main()
     const vec2 uv = barycentrics.x * vertex0.uv + barycentrics.y * vertex1.uv + barycentrics.z * vertex2.uv;
 
     // ray stuff
-    uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV;
+    uint rayFlags = gl_RayFlagsTerminateOnFirstHitNV | gl_RayFlagsOpaqueNV | gl_RayFlagsSkipClosestHitShaderNV;;
     uint cullMask = 0xff;
 
     // LIGHTING SHADER STARTS HERE --- KEEP UP TO DATE
@@ -120,8 +120,9 @@ void main()
         // light vector
         vec3 L = normalize(-currentLight.direction);
 
+        rtSecondaryShadow = 0;
         traceNV(topLevelAS, rayFlags, cullMask,
-            1 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 1 /*missIndex*/,
+            0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 1 /*missIndex*/,
             WorldPos, 0.001, L, 10000.0f,
             1 /*payload*/ // X here is location = X of the payload
         );
@@ -159,8 +160,9 @@ void main()
         // light vector
         vec3 L = normalize(currentLight.position - WorldPos);
 
+        rtSecondaryShadow = 0;
         traceNV(topLevelAS, rayFlags, cullMask,
-            1 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 1 /*missIndex*/,
+            0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 1 /*missIndex*/,
             WorldPos, 0.001, L, length(currentLight.position - WorldPos),
             1 /*payload*/ // X here is location = X of the payload
         );
@@ -200,8 +202,9 @@ void main()
         // light vector
         vec3 L = normalize(currentLight.position - WorldPos);
 
+        rtSecondaryShadow = 0;
         traceNV(topLevelAS, rayFlags, cullMask,
-            1 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 1 /*missIndex*/,
+            0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 1 /*missIndex*/,
             WorldPos, 0.001, L, length(currentLight.position - WorldPos),
             1 /*payload*/ // X here is location = X of the payload
         );

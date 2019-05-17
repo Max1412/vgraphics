@@ -275,5 +275,6 @@ void main()
   
     outColor = vec4(color, 1.0f);
     //outColor = vec4(reflectionColor*100, 1.0f);
+    //outColor = vec4(ao, ao, ao, 1.0f);
 
 }
