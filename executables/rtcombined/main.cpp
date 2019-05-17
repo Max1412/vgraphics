@@ -56,7 +56,7 @@ namespace vg
 
         {
             //shaderExtension = std::string(".fbx.spv");
-            shaderExtension = std::string(".spv");
+            m_shaderExtension = std::string(".spv");
 
             createCommandPools();
 		    createSceneInformation("pica_pica_-_mini_diorama_01/");
@@ -398,8 +398,8 @@ namespace vg
 
         void createGBufferPipeline()
         {
-            const auto vertShaderCode = Utility::readFile("combined/gbuffer.vert" + shaderExtension);
-            const auto fragShaderCode = Utility::readFile("combined/gbuffer.frag" + shaderExtension);
+            const auto vertShaderCode = Utility::readFile("combined/gbuffer.vert" + m_shaderExtension);
+            const auto fragShaderCode = Utility::readFile("combined/gbuffer.frag" + m_shaderExtension);
 
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
@@ -631,8 +631,8 @@ namespace vg
         void createFullscreenLightingPipeline()
         {
 
-            const auto vertShaderCode = Utility::readFile("deferred/fullscreen.vert" + shaderExtension);
-            const auto fragShaderCode = Utility::readFile("combined/fullscreenLightingPBR_RT.frag" + shaderExtension);
+            const auto vertShaderCode = Utility::readFile("deferred/fullscreen.vert" + m_shaderExtension);
+            const auto fragShaderCode = Utility::readFile("combined/fullscreenLightingPBR_RT.frag" + m_shaderExtension);
 
             const auto vertShaderModule = m_context.createShaderModule(vertShaderCode);
             const auto fragShaderModule = m_context.createShaderModule(fragShaderCode);
@@ -1581,16 +1581,16 @@ namespace vg
 
             //// 2. Create Pipeline
 
-            const auto rgenShaderCode = Utility::readFile("combined/softshadowPBR.rgen" + shaderExtension);
+            const auto rgenShaderCode = Utility::readFile("combined/softshadowPBR.rgen" + m_shaderExtension);
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 
             //const auto ahitShaderCode = Utility::readFile("combined/softshadow.rahit" + shaderExtension);
             //const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
-            const auto chitShaderCode = Utility::readFile("combined/softshadow.rchit" + shaderExtension);
+            const auto chitShaderCode = Utility::readFile("combined/softshadow.rchit" + m_shaderExtension);
             const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
 
-            const auto missShaderCode = Utility::readFile("combined/softshadow.rmiss" + shaderExtension);
+            const auto missShaderCode = Utility::readFile("combined/softshadow.rmiss" + m_shaderExtension);
             const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
 
@@ -1701,16 +1701,16 @@ namespace vg
 
             //// 2. Create Pipeline
 
-            const auto rgenShaderCode = Utility::readFile("combined/rtao.rgen" + shaderExtension);
+            const auto rgenShaderCode = Utility::readFile("combined/rtao.rgen" + m_shaderExtension);
             const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 
             //const auto ahitShaderCode = Utility::readFile("combined/rtao.rahit" + shaderExtension);
             //const auto ahitShaderModule = m_context.createShaderModule(ahitShaderCode);
 
-            const auto chitShaderCode = Utility::readFile("combined/rtao.rchit" + shaderExtension);
+            const auto chitShaderCode = Utility::readFile("combined/rtao.rchit" + m_shaderExtension);
             const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
 
-            const auto missShaderCode = Utility::readFile("combined/rtao.rmiss" + shaderExtension);
+            const auto missShaderCode = Utility::readFile("combined/rtao.rmiss" + m_shaderExtension);
             const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
 
@@ -1841,19 +1841,19 @@ namespace vg
 
 			//// 2. Create Pipeline
 
-			const auto rgenShaderCode = Utility::readFile("combined/rtreflectionsPBR.rgen" + shaderExtension);
+			const auto rgenShaderCode = Utility::readFile("combined/rtreflectionsPBR.rgen" + m_shaderExtension);
 			const auto rgenShaderModule = m_context.createShaderModule(rgenShaderCode);
 			
-			const auto chitShaderCode = Utility::readFile("combined/rtreflectionsPBR.rchit" + shaderExtension);
+			const auto chitShaderCode = Utility::readFile("combined/rtreflectionsPBR.rchit" + m_shaderExtension);
 			const auto chitShaderModule = m_context.createShaderModule(chitShaderCode);
 
-			const auto missShaderCode = Utility::readFile("combined/rtreflections.rmiss" + shaderExtension);
+			const auto missShaderCode = Utility::readFile("combined/rtreflections.rmiss" + m_shaderExtension);
 			const auto missShaderModule = m_context.createShaderModule(missShaderCode);
 
-			const auto chitSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rchit" + shaderExtension);
+			const auto chitSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rchit" + m_shaderExtension);
 			const auto chitSecondaryShaderModule = m_context.createShaderModule(chitSecondaryShaderCode);
 
-			const auto missSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rmiss" + shaderExtension);
+			const auto missSecondaryShaderCode = Utility::readFile("combined/rtreflectionsSecondaryShadow.rmiss" + m_shaderExtension);
 			const auto missSecondaryShaderModule = m_context.createShaderModule(missSecondaryShaderCode);
 
 
@@ -2947,7 +2947,7 @@ namespace vg
         std::vector<vk::Fence> m_computeFinishedFences;
         std::vector<vk::CommandBuffer> m_computeCommandBuffers;
 
-        std::string shaderExtension;
+        std::string m_shaderExtension;
 
     };
 }

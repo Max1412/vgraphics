@@ -29,7 +29,7 @@ void Timer::acquireTimestepDifference(const vk::Device& device, const vk::QueryP
     m_lastTimestamp = fourUints.at(0);
     m_currentTimestamp = fourUints.at(2);
 
-    if constexpr (vg::enableValidationLayers)
+    if constexpr (vg::g_enableValidationLayers)
     {
         if (fourUints.at(1) != 1 || fourUints.at(3) != 1)
             __debugbreak();

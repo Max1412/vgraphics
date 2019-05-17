@@ -150,7 +150,7 @@ private:
 
     void queryTimerResult(Timer& timer, const std::string& name, const size_t frameIndex) const
     {
-        if constexpr (vg::enableValidationLayers)
+        if constexpr (vg::g_enableValidationLayers)
         {
             if (const auto numTimeStamps = timer.getCurrentNumberOfTimestampsPerFrame(); numTimeStamps % 2 != 0)
                 m_context.get().getLogger()->warn("Timer \"{}\" has an odd number ({}) of registered Timestamps before querying", name, numTimeStamps);

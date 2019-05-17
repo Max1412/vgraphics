@@ -182,7 +182,7 @@ namespace vg
 
     void Context::createInstance()
     {
-        if (enableValidationLayers && !checkValidationLayerSupport())
+        if (g_enableValidationLayers && !checkValidationLayerSupport())
         {
             throw std::runtime_error("Validation layers requested, but not available!");
         }
@@ -194,7 +194,7 @@ namespace vg
 
         std::vector<const char*> layerNames;
 
-        if constexpr (enableValidationLayers)
+        if constexpr (g_enableValidationLayers)
             layerNames = g_validationLayers;
 
         vk::InstanceCreateInfo createInfo({}, &appInfo, static_cast<uint32_t>(layerNames.size()), layerNames.data(), static_cast<uint32_t>(requiredExtensions.size()), requiredExtensions.data());
@@ -209,10 +209,10 @@ namespace vg
     std::vector<const char*> Context::getRequiredExtensions()
     {
         uint32_t glfwExtensionCount = 0;
-        auto exts = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+        const auto exts = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
         std::vector<const char*> extensions(exts, exts + glfwExtensionCount);
 
-        if constexpr (enableValidationLayers)
+        if constexpr (g_enableValidationLayers)
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
         return extensions;
@@ -280,7 +280,7 @@ namespace vg
 
     void Context::setupDebugCallback()
     {
-        if constexpr (!enableValidationLayers) return;
+        if constexpr (!g_enableValidationLayers) return;
 
         using sevFlags = vk::DebugUtilsMessageSeverityFlagBitsEXT;
         using typeFlags = vk::DebugUtilsMessageTypeFlagBitsEXT;
@@ -415,7 +415,7 @@ namespace vg
         std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
         std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value(), indices.transferFamily.value(), indices.computeFamily.value() };
 
-        float queuePriority = 1.0f;
+        const float queuePriority = 1.0f;
         for (uint32_t queueFamily : uniqueQueueFamilies)
         {
             vk::DeviceQueueCreateInfo queueCreateInfo({}, queueFamily, 1, &queuePriority);
@@ -434,7 +434,7 @@ namespace vg
             0, nullptr,
             static_cast<uint32_t>(m_requiredDeviceExtensions.size()), m_requiredDeviceExtensions.data(), &deviceFeatures);
 
-        if constexpr (enableValidationLayers)
+        if constexpr (g_enableValidationLayers)
         {
             createInfo.enabledLayerCount = static_cast<uint32_t>(g_validationLayers.size());
             createInfo.ppEnabledLayerNames = g_validationLayers.data();

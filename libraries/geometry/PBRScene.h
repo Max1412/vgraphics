@@ -19,17 +19,17 @@
 
 struct PerMeshInfoPBR : vk::DrawIndexedIndirectCommand
 {
-	int texIndexBaseColor = -1;
-	int texIndexMetallicRoughness = -1;
-    int assimpMaterialIndex = -1;
+	int32_t texIndexBaseColor = -1;
+	int32_t texIndexMetallicRoughness = -1;
+	int32_t assimpMaterialIndex = -1;
 };
 
 struct MaterialInfoPBR
 {
-	glm::vec3 baseColor;
-	float roughness = -1.0f;
-	glm::vec3 f0;
-	float metalness = -1.0f;
+    glm::vec3 baseColor;
+    float roughness = -1.0f;
+    glm::vec3 f0;
+    float metalness = -1.0f;
 };
 
 class PBRScene

@@ -14,11 +14,11 @@ namespace vg
     const auto g_resourcesPath = std::filesystem::current_path().parent_path().parent_path().append("resources");
     const auto g_shaderPath = std::filesystem::current_path().parent_path().parent_path().append("shaders");
 
-//#ifdef NDEBUG
-//    constexpr bool enableValidationLayers = false;
-//#else
-    constexpr bool enableValidationLayers = true;
-//#endif
+#ifdef NDEBUG
+    constexpr bool g_enableValidationLayers = false;
+#else
+    constexpr bool g_enableValidationLayers = true;
+#endif
 
     struct GeometryInstance
     {
