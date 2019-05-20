@@ -13,7 +13,7 @@ layout(location = 2) out vec4 gbufferUV;
 layout(constant_id = 0) const int NUM_TEXTURES = 64;
 layout(set = 0, binding = 1) uniform sampler2D allTextures[NUM_TEXTURES];
 
-struct PerMeshInfo
+struct PerMeshInfoPBR
 {
     // standard
     uint    indexCount;
@@ -22,20 +22,20 @@ struct PerMeshInfo
     int     vertexOffset;
     uint    firstInstance;
     // additional
-    int texIndex;
-    int texSpecIndex;
+	int texIndexBaseColor;
+	int texIndexMetallicRoughness;
     int assimpMaterialIndex;
 };
 
 layout(std430, set = 0, binding = 2) readonly buffer indirectDrawBuffer
 {
-    PerMeshInfo perMesh[];
+    PerMeshInfoPBR perMesh[];
 } perMeshInfos;
 
 void main()
 {
     gbufferPosition = vec4(passWorldPos, drawID);
     gbufferNormal = vec4(passNormal, 0.0f);
-    vec2 lod = textureQueryLod(allTextures[perMeshInfos.perMesh[drawID].texIndex], fragTexCoord);
+    vec2 lod = textureQueryLod(allTextures[perMeshInfos.perMesh[drawID].texIndexBaseColor], fragTexCoord);
     gbufferUV = vec4(fragTexCoord, lod.x, lod.y);
 }

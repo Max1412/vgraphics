@@ -36,7 +36,7 @@ void main()
     uint rayFlags = gl_RayFlagsOpaqueNV;
     uint cullMask = 0xff;
     float tmin = 0.1;
-    float tmax = 100000.0;
+    float tmax = perFrameInfo.RTAORadius;
     
     float InvSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
 
@@ -44,8 +44,7 @@ void main()
 
     for(int i = 0; i < perFrameInfo.RTAOSampleCount; i++)
     {
-        vec3 direction = sampleRotatedCosineHemisphere(normal);
-        tmax = perFrameInfo.RTAORadius;
+        vec3 direction = normalize(sampleRotatedCosineHemisphere(normal));
         traceNV(topLevelAS, rayFlags, cullMask,
             0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/,
             origin, tmin, direction, tmax,

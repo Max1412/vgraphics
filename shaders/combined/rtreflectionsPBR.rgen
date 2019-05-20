@@ -48,7 +48,7 @@ vec2 Hammersley(uint i, uint N)
     return vec2(float(i)/float(N), RadicalInverse(i));
 }  
 
-vec2 ggx_importance_sample(const in vec2 random_sample, const in float roughness)
+vec2 importanceSampleGGX(const in vec2 random_sample, const in float roughness)
 {
     float phi    = random_sample.y * 2.f * 3.14156235659f;
     float rough2 = roughness * roughness;
@@ -56,7 +56,7 @@ vec2 ggx_importance_sample(const in vec2 random_sample, const in float roughness
     return vec2(phi, theta);
 }
 
-vec3 ggx_importance_hemisphere(const in vec2 importance_sample)
+vec3 sampleHemisphere(const in vec2 importance_sample)
 {
     float phi      = importance_sample.x;
     float cosTheta = cos(importance_sample.y);
@@ -90,9 +90,6 @@ void main()
 
     PerMeshInfoPBR currentMesh = perMeshInfos.perMesh[MeshID];
     MaterialInfoPBR currentMaterial = materials[currentMesh.assimpMaterialIndex];
-    //if(currentMaterial.N < 1) return; 
-
-    vec3 viewVector = normalize(origin - perFrameInfo.cameraPosWorld);
 
     uint rayFlags = gl_RayFlagsOpaqueNV;
     uint cullMask = 0xff;
@@ -141,13 +138,14 @@ void main()
     vec3 reflectionValue = vec3(0.0f);
     vec3 weightSum = vec3(0.0f);
 
+    vec3 viewVector = normalize(origin - perFrameInfo.cameraPosWorld);
     vec3 reflectedViewVector = reflect(viewVector, normal);
     for(int i = 0; i < perFrameInfo.RTReflectionSampleCount; i++)
     {
-        vec3 direction = rotateToNormal(ggx_importance_hemisphere(ggx_importance_sample(vec2(rand(), rand()), roughness)), reflectedViewVector);
+        vec3 direction = rotateToNormal(sampleHemisphere(importanceSampleGGX(vec2(rand(), rand()), roughness)), reflectedViewVector);
         while(dot(direction, normal) < 0.0f) // re-roll if direction is not in hemisphere
         {
-            direction = rotateToNormal(ggx_importance_hemisphere(ggx_importance_sample(vec2(rand(), rand()), roughness)), reflectedViewVector);
+            direction = rotateToNormal(sampleHemisphere(importanceSampleGGX(vec2(rand(), rand()), roughness)), reflectedViewVector);
         }
 
         traceNV(topLevelAS, rayFlags, cullMask,

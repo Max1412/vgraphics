@@ -5,8 +5,8 @@ const float PI = 3.1415926535;
 layout(set = 0, binding = 0) uniform accelerationStructureNV topLevelAS;
 
 layout(location = 0) rayPayloadInNV vec3 hitValue;
-hitAttributeNV vec2 attribs;
 layout(location = 1) rayPayloadNV int rtSecondaryShadow;
+hitAttributeNV vec2 attribs;
 
 layout(constant_id = 0) const int NUM_TEXTURES = 64;
 layout(set = 0, binding = 11) uniform sampler2D allTextures[NUM_TEXTURES];
@@ -63,14 +63,14 @@ void main()
     VertexInfo vertex2 = vertexInfos.vertices[currentOffset.m_vbOffset + index2];
 
     const vec2 uv = barycentrics.x * vertex0.uv + barycentrics.y * vertex1.uv + barycentrics.z * vertex2.uv;
+    const vec3 N = normalize(barycentrics.x * vertex0.normal + barycentrics.y * vertex1.normal + barycentrics.z * vertex2.normal);
+    const vec3 WorldPos = gl_WorldRayOriginNV + gl_WorldRayDirectionNV * gl_HitTNV;
 
     // ray stuff
     uint rayFlags = gl_RayFlagsTerminateOnFirstHitNV | gl_RayFlagsOpaqueNV | gl_RayFlagsSkipClosestHitShaderNV;;
     uint cullMask = 0xff;
 
     // LIGHTING SHADER STARTS HERE --- KEEP UP TO DATE
-    vec3 WorldPos = gl_WorldRayOriginNV + gl_WorldRayDirectionNV * gl_HitTNV;
-    vec3 N = normalize(barycentrics.x * vertex0.normal + barycentrics.y * vertex1.normal + barycentrics.z * vertex2.normal);
 
     PerMeshInfoPBR currentMeshInfo = perMeshInfos.perMesh[gl_InstanceCustomIndexNV];
     MaterialInfoPBR material = materials[currentMeshInfo.assimpMaterialIndex];

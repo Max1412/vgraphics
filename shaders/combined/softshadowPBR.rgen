@@ -59,7 +59,7 @@ void main()
     float tmin = 0.001;
     float tmax = 100000.0;
     
-    float InvSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
+    float invSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);
 
     // HaltonState hState;
     // haltonInit(hState, int(gl_LaunchIDNV.x), int(gl_LaunchIDNV.y), 1, 2, perFrameInfo.frameSampleCount, 1);
@@ -89,7 +89,7 @@ void main()
 
         // save incrementally
         float oldValue = imageLoad(softShadowDirectionalImage, ivec3(gl_LaunchIDNV.xy, i)).x;
-        dirShadowValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * dirShadowValue;
+        dirShadowValue = (perFrameInfo.frameSampleCount * invSampleCount) * oldValue + invSampleCount * dirShadowValue;
         imageStore(softShadowDirectionalImage, ivec3(gl_LaunchIDNV.xy, i), vec4(dirShadowValue));
 
     }
@@ -137,7 +137,7 @@ void main()
 
         // save incrementally
         float oldValue = imageLoad(softShadowPointImage, ivec3(gl_LaunchIDNV.xy, i)).x;
-        pointShadowValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * pointShadowValue;
+        pointShadowValue = (perFrameInfo.frameSampleCount * invSampleCount) * oldValue + invSampleCount * pointShadowValue;
         imageStore(softShadowPointImage, ivec3(gl_LaunchIDNV.xy, i), vec4(pointShadowValue));
 
     }
@@ -170,7 +170,7 @@ void main()
 
         // save incrementally
         float oldValue = imageLoad(softShadowSpotImage, ivec3(gl_LaunchIDNV.xy, i)).x;
-        spotShadowValue = (perFrameInfo.frameSampleCount * InvSampleCount) * oldValue + InvSampleCount * spotShadowValue;
+        spotShadowValue = (perFrameInfo.frameSampleCount * invSampleCount) * oldValue + invSampleCount * spotShadowValue;
         imageStore(softShadowSpotImage, ivec3(gl_LaunchIDNV.xy, i), vec4(spotShadowValue));
     }
 
