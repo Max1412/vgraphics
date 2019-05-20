@@ -142,12 +142,12 @@ namespace vg
         }
 
         std::vector<vk::Semaphore> waitSemaphores;
-        std::vector< vk::PipelineStageFlags> waitStages;
+        std::vector<vk::PipelineStageFlags> waitStages;
 
         if (m_useAsync)
         {
             waitSemaphores = { m_imageAvailableSemaphores.at(m_currentFrame), m_ASupdateSemaphores.at(m_currentFrame) };
-            waitStages = { vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eRayTracingShaderNV };
+            waitStages = { vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV };
 
         }
         else

@@ -163,7 +163,7 @@ namespace vg
     BufferInfo BaseApp::fillBufferTroughStagedTransfer(const std::vector<T>& data, const vk::BufferUsageFlags actualBufferUsage) const
     {
         vk::DeviceSize bufferSize = sizeof(T) * data.size();
-		//TODO evtl CPU_TO_GPU
+
         auto stagingBufferInfo = createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY, vk::SharingMode::eConcurrent, VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
         // staging buffer is persistently mapped, no mapping necessary

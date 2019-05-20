@@ -1613,7 +1613,7 @@ namespace vg
                 // group 1: hit
                 //vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
                 //vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV},
-                // group 2: miss
+                // group 1: miss
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV}
             };
 
@@ -1730,7 +1730,7 @@ namespace vg
             std::array shaderGroups = {
                 // group 0: raygen
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eGeneral, 0, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
-                // group 1: any hit
+                // group 1: closest hit
                 vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, 1, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV},
                 //vk::RayTracingShaderGroupCreateInfoNV{vk::RayTracingShaderGroupTypeNV::eTrianglesHitGroup, VK_SHADER_UNUSED_NV, VK_SHADER_UNUSED_NV, 2, VK_SHADER_UNUSED_NV},
                 // group 2: miss
@@ -2155,7 +2155,7 @@ namespace vg
                 m_rtSoftShadowsSecondaryCommandBuffers.at(i).bindDescriptorSets(vk::PipelineBindPoint::eRayTracingNV, m_rtSoftShadowsPipelineLayout,
                     0, static_cast<uint32_t>(dss.size()), dss.data(), 0, nullptr);
 
-                // transition gbuffer images to read it in RT //TODO transition back?
+                // transition gbuffer images to read it in RT
                 vk::ImageMemoryBarrier barrierGBposTORT(
                     vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead,
                     vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -2198,8 +2198,8 @@ namespace vg
                 m_timerManager.writeTimestampStart("2 Ray Traced Shadows", m_rtSoftShadowsSecondaryCommandBuffers.at(i), vk::PipelineStageFlagBits::eRayTracingShaderNV, i);
 
 
-                auto OwnCmdTraceRays = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
-                OwnCmdTraceRays(m_rtSoftShadowsSecondaryCommandBuffers.at(i),
+                auto vkCmdTraceRaysNV = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdTraceRaysNV"));
+                vkCmdTraceRaysNV(m_rtSoftShadowsSecondaryCommandBuffers.at(i),
                     m_rtSoftShadowSBTInfo.m_Buffer, 0, // raygen
                     m_rtSoftShadowSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
                     nullptr, 0, 0, // m_rtSoftShadowSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // (any) hit
@@ -2266,7 +2266,7 @@ namespace vg
                     vk::DependencyFlagBits::eByRegion, {}, {}, barrierAOTORT
                 );
 
-                OwnCmdTraceRays(m_rtAOSecondaryCommandBuffers.at(i),
+                vkCmdTraceRaysNV(m_rtAOSecondaryCommandBuffers.at(i),
                     m_rtAOSBTInfo.m_Buffer, 0, // raygen
                     m_rtAOSBTInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
                     m_rtAOSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // (any) hit
@@ -2298,7 +2298,7 @@ namespace vg
 
 				///// REFLECTION PASS /////
 
-                auto generateReflectionSecondaryCommandBuffer = [this, &OwnCmdTraceRays, &beginInfo3](const glm::ivec2& extent, vk::CommandBuffer& commandBuffer, const size_t i)
+                auto generateReflectionSecondaryCommandBuffer = [this, &vkCmdTraceRaysNV, &beginInfo3](const glm::ivec2& extent, vk::CommandBuffer& commandBuffer, const size_t i)
                 {
                     commandBuffer.begin(beginInfo3);
                     m_timerManager.writeTimestampStart("4 Ray Traced Reflections", commandBuffer, vk::PipelineStageFlagBits::eRayTracingShaderNV, i);
@@ -2324,7 +2324,7 @@ namespace vg
                         vk::DependencyFlagBits::eByRegion, {}, {}, { barrierReflTORT, barrierLowResReflTORT }
                     );
 
-                    OwnCmdTraceRays(commandBuffer,
+                    vkCmdTraceRaysNV(commandBuffer,
                         m_rtReflectionsSBTInfo.m_Buffer, 0, // raygen
                         m_rtReflectionsSBTInfo.m_Buffer, 2 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // miss
                         m_rtReflectionsSBTInfo.m_Buffer, 1 * m_context.getRaytracingProperties().shaderGroupHandleSize, m_context.getRaytracingProperties().shaderGroupHandleSize, // closest hit
@@ -2467,13 +2467,14 @@ namespace vg
                     sizeof(decltype(newModelMatrix4x4)) * m_animatedObjectID,
                     sizeof(decltype(newModelMatrix4x4)), glm::value_ptr(newModelMatrix4x4));
                 //BARRIER?
+
                 vk::AccelerationStructureInfoNV asInfoTop(vk::AccelerationStructureTypeNV::eTopLevel, vk::BuildAccelerationStructureFlagBitsNV::eAllowUpdate, static_cast<uint32_t>(m_scene.getModelMatrices().size()), 0, nullptr);
                 auto OwnCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(m_context.getDevice(), "vkCmdBuildAccelerationStructureNV"));
                 OwnCmdBuildAccelerationStructureNV(cmdBufForASUpdate, reinterpret_cast<VkAccelerationStructureInfoNV*>(&asInfoTop), m_instanceBufferInfo.m_Buffer, 0, m_updateAS, m_topAS.m_AS, m_updateAS ? m_topAS.m_AS : nullptr, m_scratchBuffer.m_Buffer, 0);
                 //m_commandBuffers.at(currentImage).buildAccelerationStructureNV(asInfoTop, m_instanceBufferInfo.m_Buffer, 0, m_updateAS, m_topAS.m_AS, nullptr, m_scratchBuffer.m_Buffer, 0);
 
                 cmdBufForASUpdate.pipelineBarrier(vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, vk::PipelineStageFlagBits::eRayTracingShaderNV, {}, memoryBarrier, nullptr, nullptr);
-
+                
                 m_timerManager.writeTimestampStop("0 AS Update", cmdBufForASUpdate, vk::PipelineStageFlagBits::eAccelerationStructureBuildNV, currentImage);
 
                 if(m_useAsync)
@@ -2487,7 +2488,8 @@ namespace vg
 
                     vk::SubmitInfo submitInfo(0, nullptr, nullptr,
                         //1, &m_guiFinishedSemaphores.at(oldSemIndex), waitStages.data(),
-                        1, & m_computeCommandBuffers.at(currentImage),
+                        1, &m_computeCommandBuffers.at(currentImage),
+                        //0, nullptr);
                         1, &m_ASupdateSemaphores.at(m_currentFrame));
 
                     m_context.getComputeQueue().submit(submitInfo, nullptr);// , m_computeFinishedFences.at(currentImage));
@@ -2596,11 +2598,11 @@ namespace vg
             ////// ImGUI WINDOWS GO HERE
             if (ImGui::BeginMainMenuBar())
             {
-                if (ImGui::BeginMenu("Test"))
-                {
-                    if(ImGui::Checkbox("Show demo window", &m_imguiShowDemoWindow)){}
-                    ImGui::EndMenu();
-                }
+                //if (ImGui::BeginMenu("Test"))
+                //{
+                //    if(ImGui::Checkbox("Show demo window", &m_imguiShowDemoWindow)){}
+                //    ImGui::EndMenu();
+                //}
                 if (ImGui::BeginMenu("Shaders"))
                 {
                     if (ImGui::Button("Reload: g-buffer"))
