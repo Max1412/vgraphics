@@ -116,6 +116,8 @@ void main()
             vec3 direction = rotateToNormal(directionCone, toLight);
             tmax += currentLight.radius;
             direction = normalize(direction);
+            if(currentLight.radius < 0.0001f)
+                direction = toLight;
 
             // vec3 pointOnLight = generatePointOnSphericalLight(currentLight.position, currentLight.radius);
             // tmax = length(pointOnLight - origin);

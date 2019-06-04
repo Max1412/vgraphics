@@ -35,7 +35,7 @@ void main()
 
     uint rayFlags = gl_RayFlagsOpaqueNV;
     uint cullMask = 0xff;
-    float tmin = 0.1;
+    float tmin = 0.001;
     float tmax = perFrameInfo.RTAORadius;
     
     float InvSampleCount = 1.0f / (perFrameInfo.frameSampleCount + 1.0f);

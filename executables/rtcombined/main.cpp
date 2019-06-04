@@ -53,6 +53,9 @@ namespace vg
             m_scene("pica_pica_-_mini_diorama_01/scene.gltf")
             //m_scene("Bistro/Bistro_Research_Exterior.fbx")
             //m_scene("Bistro/Bistro_Research_Interior.fbx")
+            //m_scene("Bistro_v4/Bistro_Interior.fbx")
+            //m_scene("Bistro_v4/Bistro_Exterior.fbx")
+            //m_scene("SunTemple/SunTemple.fbx")
 
         {
             //shaderExtension = std::string(".fbx.spv");
@@ -61,6 +64,8 @@ namespace vg
             createCommandPools();
 		    createSceneInformation("pica_pica_-_mini_diorama_01/");
 			//createSceneInformation("Bistro/");
+            //createSceneInformation("Bistro_v4/");
+            //createSceneInformation("SunTemple/");
 
             createDepthResources();
 
@@ -158,6 +163,8 @@ namespace vg
                 m_context.getDevice().destroySemaphore(m_graphicsRenderFinishedSemaphores.at(i));
                 m_context.getDevice().destroySemaphore(m_guiFinishedSemaphores.at(i));
                 m_context.getDevice().destroyFence(m_inFlightFences.at(i));
+
+                m_context.getDevice().destroySemaphore(m_ASupdateSemaphores.at(i));
             }
 
             for(const auto& fence : m_computeFinishedFences)
@@ -841,7 +848,7 @@ namespace vg
             PBRPointLight pointLight;
             pointLight.position = glm::vec3(43.0f, 100.0f, -17.0f);
             pointLight.intensity = glm::vec3(8000.0f);
-            pointLight.radius = 5.0f;
+            pointLight.radius = 12.0f;
 
             PBRSpotLight spotLight;
             spotLight.position = glm::vec3(3.0f, 10.0f, 3.0f);
@@ -2661,7 +2668,7 @@ namespace vg
                     ImGui::RadioButton("Full Resolution Reflections", &m_useLowResReflections, 0); ImGui::SameLine();
                     ImGui::RadioButton("Low Resolution Reflections", &m_useLowResReflections, 1);
                     ImGui::SliderFloat("Roughness Threshold for Reflections", &m_reflectionRoughnessThreshold, 0.0f, 1.0f);
-                    if (m_reflectionRoughnessThreshold > 0.0f) m_accumulateRTSamples = false;
+                    //if (m_reflectionRoughnessThreshold > 0.0f) m_accumulateRTSamples = false;
                     ImGui::EndMenu();
                 }
 				if (ImGui::BeginMenu("Lighting"))

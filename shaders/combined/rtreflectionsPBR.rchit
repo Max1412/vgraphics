@@ -105,9 +105,6 @@ void main()
    // viewing vector
     vec3 V = normalize(perFrameInfo.cameraPosWorld - WorldPos);
 
-    // reflection vector
-    vec3 R = reflect(-V, N);
-
     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo, metallic);
                

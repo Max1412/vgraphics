@@ -119,9 +119,6 @@ void main()
     // viewing vector
     vec3 V = normalize(matrices.cameraPos.xyz - WorldPos);
 
-    // reflection vector
-    vec3 R = reflect(-V, N);
-
     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo, metallic);
     //F0 = material.f0;
@@ -274,7 +271,7 @@ void main()
     color = pow(color, vec3(1.0/2.2));  
   
     outColor = vec4(color, 1.0f);
-    //outColor = vec4(reflectionColor*100, 1.0f);
+    //outColor = vec4(reflectionColor*100.0, 1.0f);
     //outColor = vec4(ao, ao, ao, 1.0f);
 
 }
