@@ -13,7 +13,7 @@
       "variables": [
         {
           "name": "CMAKE_TOOLCHAIN_FILE",
-          "value": "D:/BenediktKraus/Framework/submodules/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          "value": "C:\\Users\\mm\\Documents\\Uni-Archiv\\vcpkg\\vcpkg\\scripts\\buildsystems/vcpkg.cmake"
         },
         {
           "name": "VCPKG_TARGET_TRIPLET",
@@ -32,10 +32,10 @@
       "cmakeCommandArgs": "",
       "buildCommandArgs": "",
       "variables": [
-          {
-            "name": "CMAKE_TOOLCHAIN_FILE",
-            "value": "D:/BenediktKraus/Framework/submodules/vcpkg/scripts/buildsystems/vcpkg.cmake"
-          },
+        {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:\\Users\\mm\\Documents\\Uni-Archiv\\vcpkg\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
+        },
           {
             "name": "VCPKG_TARGET_TRIPLET",
             "value": "x64-windows"
@@ -53,10 +53,10 @@
       "cmakeCommandArgs": "",
       "buildCommandArgs": "",
       "variables": [
-          {
-            "name": "CMAKE_TOOLCHAIN_FILE",
-            "value": "D:/BenediktKraus/Framework/submodules/vcpkg/scripts/buildsystems/vcpkg.cmake"
-          },
+        {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:\\Users\\mm\\Documents\\Uni-Archiv\\vcpkg\\vcpkg\\scripts\\buildsystems/vcpkg.cmake"
+        },
           {
             "name": "VCPKG_TARGET_TRIPLET",
             "value": "x64-windows"
