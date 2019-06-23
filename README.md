@@ -25,7 +25,8 @@ Also contains some prototyping projects. The hybrid ray tracing executable is ca
 * [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
 * [spdlog](https://github.com/gabime/spdlog)
 * [glslc](https://github.com/google/shaderc)
-
+* [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) 
+* 
 ### Usage
 #### Windows
 * Please use [vcpkg](https://github.com/Microsoft/vcpkg) for dependency management when using windows to use this project
@@ -43,7 +44,7 @@ Also contains some prototyping projects. The hybrid ray tracing executable is ca
 * Uses RTX for ray traced shadows, ambient occlusion, and reflections
 * Combines ray traced results with direct lighting
 * Acceleration structure can be updated
-* More features: Triple buffering, PBR (Cook-Torrance BRDF), GUI for settings, shader live-reloading, dynamic light sources
+* More features: Triple buffering, PBR (Cook-Torrance BRDF), GUI for settings, shader live-reloading, dynamic light sources, included timers
 ##### Others
 * All other executables were just for protoyping, smaller examples, and learning.
 
