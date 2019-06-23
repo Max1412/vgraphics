@@ -37,13 +37,15 @@ Also contains some prototyping projects. The hybrid ray tracing executable is ca
   
 
 ### Executables
-#### RTcombined
+##### RTcombined
 * Demo for my masters thesis
 * Renders the scene into a G-Buffer
 * Uses RTX for ray traced shadows, ambient occlusion, and reflections
 * Combines ray traced results with direct lighting
 * Acceleration structure can be updated
 * More features: Triple buffering, PBR (Cook-Torrance BRDF), GUI for settings, shader live-reloading, dynamic light sources
+##### Others
+* All other executables were just for protoyping, smaller examples, and learning.
 
 ### Resources/Licensing
 
